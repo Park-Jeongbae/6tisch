@@ -37,10 +37,10 @@ from .trickle_timer import TrickleTimer
 # =========================== body ============================================
 
 class Rpl(object):
-
-    DEFAULT_DIO_INTERVAL_MIN = 14
-    DEFAULT_DIO_INTERVAL_DOUBLINGS = 9
-    DEFAULT_DIO_REDUNDANCY_CONSTANT = 3
+    #RFC 6550
+    DEFAULT_DIO_INTERVAL_MIN = 3
+    DEFAULT_DIO_INTERVAL_DOUBLINGS = 20
+    DEFAULT_DIO_REDUNDANCY_CONSTANT = 10
 
     # locally-defined constants
     DEFAULT_DIS_INTERVAL_SECONDS = 60
@@ -261,6 +261,11 @@ class Rpl(object):
         if self.dodagId is None:
             # seems we performed local repair
             return
+        
+        if self.trickle_timer.redundancy_constant <= self.trickle_timer.counter:
+            self.trickle_timer.counter = 0
+            return
+        self.trickle_timer.counter = 0
 
         dio = self._create_DIO(dstIp)
 
@@ -337,12 +342,24 @@ class Rpl(object):
                 # if the DIO has the infinite rank, reset the Trickle timer
                 self.trickle_timer.reset()
 
+        # DIO 수신으로 인해 Rank 또는 부모 변경 전에 이전의 정보를 저장해둠
+        rank = self.get_rank()
+        preferredParent = self.getPreferredParent()
+
         # feed our OF with the received DIO
         self.of.update(packet)
 
         if self.getPreferredParent() is not None:
             # (re)join the RPL network
-            self.join_dodag(packet[u'app'][u'dodagId'])
+
+            if self.dodagId is None or self.dodagId != packet[u'app'][u'dodagId']:
+                self.join_dodag(packet[u'app'][u'dodagId'])
+            else:
+                # RFC 6650
+                # A DIO from a sender with a lesser DAGRank that causes no changes to the recipient's parent set, 
+                # preferred parent, or Rank SHOULD be considered consistent with respect to the Trickle timer.                
+                if rank == self.get_rank() and preferredParent == self.getPreferredParent():
+                    self.trickle_timer.increment_counter()
 
     def join_dodag(self, dodagId=None):
         if dodagId is None:

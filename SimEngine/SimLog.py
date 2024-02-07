@@ -105,6 +105,11 @@ LOG_PROP_DROP_LOCKON              = {u'type': u'prop.drop_lockon' ,         u'ke
 # === connectivity matrix
 LOG_CONN_MATRIX_K7_UPDATE         = {u'type': u'conn.matrix.update',        u'keys': [u'start_trace_position', u'end_trace_position', u'asn_of_next_update']}
 
+
+# === user 
+LOG_USER_MINIMALCELL_PACKETS         = {u'type': u'user.minimalcell_packets',   u'keys': [u'channel',u'count_per_packet_type',u'is_interference']}
+LOG_USER_MINIMALCELL_TRANS_RESULT    = {u'type': u'user.minimalcell_trans_result',   u'keys': [u'channel',u'count_per_packet_type',u'is_interference',u'is_recv_success']}
+
 # ============================ SimLog =========================================
 
 class SimLog(object):

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from __future__ import absolute_import
 # =========================== imports =========================================
 
@@ -234,6 +236,10 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
         preferred_parent = self.mote.rpl.getPreferredParent()
         if not preferred_parent:
             # nothing to do
+            return
+        
+        # 가끔 mac 주소가 없는 패킷이 수신될 때가 있음
+        if received_packet is not None and 'mac' not in received_packet:
             return
 
         if (

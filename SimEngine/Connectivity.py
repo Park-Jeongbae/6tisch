@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #!/usr/bin/python
 """
 Creates a connectivity matrix and provide methods to get the connectivity
@@ -147,6 +148,38 @@ class Connectivity(object):
             else:
                 # mote is idle, do nothing
                 pass
+                
+        # 미니멀셀에서의 전송된 패킷의 수와 타입을 로그로 남김
+        if asn % self.settings.tsch_slotframeLength == 0 :
+            # 전송된 패킷이 있을 경우 
+            if len(transmissions_by_channel) > 0: 
+                count_per_packet_type = {}
+
+                # 미니멀셀에서 패킷이 전송된 채널 별로 정리
+                for channel in transmissions_by_channel.keys():
+
+                    is_interference = False
+                    if  len(transmissions_by_channel[channel]) > 1:
+                        is_interference = True
+
+                    # 각 채널에서 전송된 패킷의 종류와 개수를 저장함
+                    for t in transmissions_by_channel[channel]:
+                        packet_type = t[u'packet'][u'type']
+                        if packet_type not in count_per_packet_type:
+                            count_per_packet_type[packet_type] = 1
+                        else:
+                            count_per_packet_type[packet_type] += 1
+
+                    # 로그를 남김
+                    self.log(
+                        SimLog.LOG_USER_MINIMALCELL_PACKETS,
+                        {
+                            u'channel' : channel,
+                            u'count_per_packet_type' : count_per_packet_type,
+                            u'is_interference' : is_interference
+                        }
+                    )
+
 
         # remove all motes that are listening to channels without any transmission
         for channel in set(receivers_by_channel.keys()) - set(transmissions_by_channel.keys()):
@@ -177,6 +210,7 @@ class Connectivity(object):
                 lockon_random_value = None
                 interfering_transmissions = []
                 detected_transmissions = 0
+                is_interference_packet = False
 
                 # deal with collisions
                 if len(transmissions_by_channel[channel]) > 1:
@@ -241,6 +275,7 @@ class Connectivity(object):
 
                     # calculate the resulting pdr when taking
                     # interferers into account
+                    is_interference_packet = True
                     packet_pdr = self._compute_pdr_with_interference(
                         listener_id=listener_id,
                         lockon_transmission=lockon_transmission,
@@ -276,6 +311,19 @@ class Connectivity(object):
                 if lockon_random_value < packet_pdr:
                     # listener receives!
 
+                    # 미니멀 셀에서 데이터가 수신 성공한 경우
+                    if asn % self.settings.tsch_slotframeLength == 0 :
+                        # 로그를 남김
+                        self.log(
+                            SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT,
+                            {
+                                u'channel' : channel,
+                                u'count_per_packet_type' : packet_type,
+                                u'is_interference' : is_interference_packet,
+                                u'is_recv_success' : True
+                            }
+                        )
+
                     # lockon_transmission received correctly
                     receivedAck = self.engine.motes[listener_id].radio.rxDone(
                         packet=lockon_transmission[u'packet'],
@@ -299,6 +347,21 @@ class Connectivity(object):
                 else:
                     # lockon_transmission NOT received correctly
                     # (interference)
+
+                    # 미니멀 셀에서 데이터가 수신 실패한 경우
+                    if asn % self.settings.tsch_slotframeLength == 0 :
+                        # 로그를 남김
+                        self.log(
+                            SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT,
+                            {
+                                u'channel' : channel,
+                                u'count_per_packet_type' : packet_type,
+                                u'is_interference' : is_interference_packet,
+                                u'is_recv_success' : False
+                            }
+                        )
+
+
                     receivedAck = self.engine.motes[listener_id].radio.rxDone(
                         packet=None,
                     )
