@@ -58,6 +58,7 @@ def init_mote():
         'charge': None,
         'lifetime_AA_years': None,
         'avg_current_uA': None,
+        'neighbor_num': 0
     }
 
 # =========================== KPIs ============================================
@@ -288,6 +289,15 @@ def kpis_all(inputfile):
                 networkStats[run_id]['minimalcell_trans_result']['no_if_success'] += 1
             else:
                 networkStats[run_id]['minimalcell_trans_result']['if_success'] += 1
+        elif logline['_type'] == SimLog.LOG_USER_NEIGHBOR_NUM['type']:
+
+            mote_id = logline['_mote_id']
+            neighbor_num = logline['neighbor_num']
+
+            if mote_id == DAGROOT_ID:
+                continue
+
+            allstats[run_id][mote_id]['neighbor_num'] = neighbor_num
 
     # === compute advanced motestats
 
@@ -579,6 +589,19 @@ def kpis_all(inputfile):
 
     # 네트워크에 토폴로지에 참여한 노드의 평균 시간을 계산함
     avgStates['asn_rpl_joined_motes']  = sum(stats['global-stats']['joining-time'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
+
+    # 루트 노드를 제외한 노드들의 평균 이웃 개수를 구함
+    neighbor_num_avg = 0
+    for (run_id, per_mote_stats) in list(allstats.items()):
+        neighbor_num_sum = 0
+        num_mote = 0
+        for (mote_id, motestats) in list(per_mote_stats.items()):
+            if 'neighbor_num' in motestats:
+                neighbor_num_sum += motestats['neighbor_num']
+                num_mote += 1
+        neighbor_num_avg += neighbor_num_sum/num_mote
+
+    avgStates['neighbor_num']  =  neighbor_num_avg / num_runs
 
     # === remove unnecessary stats
 

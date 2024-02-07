@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """ RPL Implementation
 references:
 - IETF RFC 6550

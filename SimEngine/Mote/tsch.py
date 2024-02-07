@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 """
 from __future__ import absolute_import
@@ -720,6 +722,14 @@ class Tsch(object):
             # add the source mote to the neighbor list if it's not listed yet
             if packet[u'mac'][u'srcMac'] not in self.neighbor_table:
                 self.neighbor_table.append(packet[u'mac'][u'srcMac'])
+                # 로그를 남김
+                self.log(
+                    SimEngine.SimLog.LOG_USER_NEIGHBOR_NUM,
+                    {
+                        u'_mote_id' : self.mote.id,
+                        u'neighbor_num' : len(self.neighbor_table),
+                    }
+                )
 
             # accept only EBs while we're not syncrhonized
             if (
