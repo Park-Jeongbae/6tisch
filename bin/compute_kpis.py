@@ -267,28 +267,32 @@ def kpis_all(inputfile):
 
             if 'minimalcell_trans_result' not in networkStats[run_id]:
                 networkStats[run_id]['minimalcell_trans_result'] = {}
+
+            txResults = logline['txResults']
             
-            is_interference = logline['is_interference']
-            is_recv_success = logline['is_recv_success']
+            for txResult in txResults:
 
-            if 'no_if_fail' not in networkStats[run_id]['minimalcell_trans_result']:
-                networkStats[run_id]['minimalcell_trans_result']['no_if_fail'] = 0
-            if 'if_fail' not in networkStats[run_id]['minimalcell_trans_result']:
-                networkStats[run_id]['minimalcell_trans_result']['if_fail'] = 0
-            if 'no_if_success' not in networkStats[run_id]['minimalcell_trans_result']:
-                networkStats[run_id]['minimalcell_trans_result']['no_if_success'] = 0
-            if 'if_success' not in networkStats[run_id]['minimalcell_trans_result']:
-                networkStats[run_id]['minimalcell_trans_result']['if_success'] = 0
+                is_interference = txResult['is_interference']
+                is_recv_success = txResult['is_recv_success']
 
-            # 간섭 발생 여부와 패킷을 정상적으로 수신했는지 정리함
-            if is_interference == False and is_recv_success == False:
-                networkStats[run_id]['minimalcell_trans_result']['no_if_fail'] += 1
-            elif is_interference == True and is_recv_success == False:
-                networkStats[run_id]['minimalcell_trans_result']['if_fail'] += 1
-            elif is_interference == False and is_recv_success == True:
-                networkStats[run_id]['minimalcell_trans_result']['no_if_success'] += 1
-            else:
-                networkStats[run_id]['minimalcell_trans_result']['if_success'] += 1
+                if 'no_if_fail' not in networkStats[run_id]['minimalcell_trans_result']:
+                    networkStats[run_id]['minimalcell_trans_result']['no_if_fail'] = 0
+                if 'if_fail' not in networkStats[run_id]['minimalcell_trans_result']:
+                    networkStats[run_id]['minimalcell_trans_result']['if_fail'] = 0
+                if 'no_if_success' not in networkStats[run_id]['minimalcell_trans_result']:
+                    networkStats[run_id]['minimalcell_trans_result']['no_if_success'] = 0
+                if 'if_success' not in networkStats[run_id]['minimalcell_trans_result']:
+                    networkStats[run_id]['minimalcell_trans_result']['if_success'] = 0
+
+                # 간섭 발생 여부와 패킷을 정상적으로 수신했는지 정리함
+                if is_interference == False and is_recv_success == False:
+                    networkStats[run_id]['minimalcell_trans_result']['no_if_fail'] += 1
+                elif is_interference == True and is_recv_success == False:
+                    networkStats[run_id]['minimalcell_trans_result']['if_fail'] += 1
+                elif is_interference == False and is_recv_success == True:
+                    networkStats[run_id]['minimalcell_trans_result']['no_if_success'] += 1
+                else:
+                    networkStats[run_id]['minimalcell_trans_result']['if_success'] += 1
         elif logline['_type'] == SimLog.LOG_USER_NEIGHBOR_NUM['type']:
 
             mote_id = logline['_mote_id']

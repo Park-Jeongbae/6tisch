@@ -200,6 +200,7 @@ class Connectivity(object):
             for t in transmissions_by_channel[channel]:
                 self.engine.motes[t[u'tx_mote_id']].radio.txDone(False)
 
+        txResults = []
         # prosses packets sent on channels with listeners
         for channel in set(transmissions_by_channel.keys()) & set(receivers_by_channel.keys()):
             assert channel in d.TSCH_HOPPING_SEQUENCE[:self.num_channels]
@@ -313,16 +314,11 @@ class Connectivity(object):
 
                     # 미니멀 셀에서 데이터가 수신 성공한 경우
                     if asn % self.settings.tsch_slotframeLength == 0 :
-                        # 로그를 남김
-                        self.log(
-                            SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT,
-                            {
-                                u'channel' : channel,
-                                u'count_per_packet_type' : packet_type,
-                                u'is_interference' : is_interference_packet,
-                                u'is_recv_success' : True
-                            }
-                        )
+
+                        txResults.append({  u'channel' : channel,
+                                            u'count_per_packet_type' : packet_type,
+                                            u'is_interference' : is_interference_packet,
+                                            u'is_recv_success' : True })      
 
                     # lockon_transmission received correctly
                     receivedAck = self.engine.motes[listener_id].radio.rxDone(
@@ -350,17 +346,10 @@ class Connectivity(object):
 
                     # 미니멀 셀에서 데이터가 수신 실패한 경우
                     if asn % self.settings.tsch_slotframeLength == 0 :
-                        # 로그를 남김
-                        self.log(
-                            SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT,
-                            {
-                                u'channel' : channel,
-                                u'count_per_packet_type' : packet_type,
-                                u'is_interference' : is_interference_packet,
-                                u'is_recv_success' : False
-                            }
-                        )
-
+                        txResults.append({  u'channel' : channel,
+                                            u'count_per_packet_type' : packet_type,
+                                            u'is_interference' : is_interference_packet,
+                                            u'is_recv_success' : False })
 
                     receivedAck = self.engine.motes[listener_id].radio.rxDone(
                         packet=None,
@@ -393,6 +382,15 @@ class Connectivity(object):
 
                 # indicate to source packet was sent
                 self.engine.motes[t[u'tx_mote_id']].radio.txDone(isACKed)
+
+        #여기 로그를 남긴다
+        if txResults:
+            self.log(
+                SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT,
+                {
+                    u'txResults' : txResults,
+                }
+            )
 
         # verify all radios off
         for mote in self.engine.motes:
