@@ -121,6 +121,7 @@ class Tsch(object):
             else:
                 self._start_keep_alive_timer()
                 self._start_synchronization_timer()
+                self._start_sendEB_timer()
 
             # start SF
             self.mote.sf.start()
@@ -149,6 +150,7 @@ class Tsch(object):
             self.clock.desync()
             self._stop_keep_alive_timer()
             self._stop_synchronization_timer()
+            self._stop_sendEB_timer()
             self.txQueue = []
             self.received_eb_list = {}
             # we may have this timer task
@@ -361,7 +363,6 @@ class Tsch(object):
 
     def enqueue(self, packet, priority=False):
 
-        assert packet[u'type'] != d.PKT_TYPE_EB
         assert u'srcMac' in packet[u'mac']
         assert u'dstMac' in packet[u'mac']
 
@@ -495,23 +496,12 @@ class Tsch(object):
         dst_mac_addr = cell.mac_addr
         packet_to_send = None
         if dst_mac_addr is None:
-            if (
-                    len(self.txQueue) == 0
-                    and
-                    cell.link_type in [
-                        d.LINKTYPE_ADVERTISING,
-                        d.LINKTYPE_ADVERTISING_ONLY
-                    ]
-                ):
-                # txQueue is empty; we may return an EB
-                if (
-                        self.mote.clear_to_send_EBs_DATA()
-                        and
-                        self._decided_to_send_eb()
-                    ):
-                    packet_to_send = self._create_EB()
-                else:
-                    packet_to_send = None
+            if cell.link_type in [d.LINKTYPE_ADVERTISING,d.LINKTYPE_ADVERTISING_ONLY]:
+                for packet in self.txQueue:
+                    if packet['mac']['dstMac'] == d.BROADCAST_ADDRESS:
+                        packet_to_send = packet
+                    if packet_to_send is not None:
+                        break
             else:
                 # return the first one in the TX queue, whose destination MAC
                 # is not associated with any of allocated (dedicated) TX cells
@@ -607,9 +597,8 @@ class Tsch(object):
             ]
             assert isACKed == False
 
-            # EBs are never in txQueue, no need to remove.
-            if self.pktToSend[u'type'] != d.PKT_TYPE_EB:
-                self.dequeue(self.pktToSend)
+            # remove packet from queue
+            self.dequeue(self.pktToSend)
 
         else:
             # I just sent a unicast packet...
@@ -1142,11 +1131,10 @@ class Tsch(object):
     def _decided_to_send_eb(self):
         # short-hand
         prob = float(self.settings.tsch_probBcast_ebProb)
-        n    = 1 + len(self.neighbor_table)
 
         # following the Bayesian broadcasting algorithm
         return (
-            (random.random() < (old_div(prob, n)))
+            (random.random() < prob)
             and
             self.iAmSendingEBs
         )
@@ -1399,6 +1387,7 @@ class Tsch(object):
             target_asn = self.engine.getAsn() + d.TSCH_DESYNCHRONIZED_TIMEOUT_SLOTS
 
             def _desync():
+                print("_desync")
                 self.setIsSync(False)
 
             self.engine.scheduleAtAsn(
@@ -1407,6 +1396,32 @@ class Tsch(object):
                 uniqueTag      = self._get_event_tag(u'tsch.synchronization_timer'),
                 intraSlotOrder = d.INTRASLOTORDER_STACKTASKS
             )
+
+    def _stop_sendEB_timer(self):
+        self.engine.removeFutureEvent(
+            uniqueTag = self._get_event_tag(u'tsch.sendEB_timer')
+        )
+
+    def _start_sendEB_timer(self):
+        asnNow = self.engine.getAsn()
+
+        # schedule sending a EB
+        self.engine.scheduleAtAsn(
+            asn              = asnNow + self.settings.tsch_slotframeLength,
+            cb               = self._sendEB,
+            uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
+            intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
+        )
+
+    def _sendEB(self):
+
+        packet_to_send = None
+        if self._decided_to_send_eb():
+            packet_to_send = self._create_EB()
+            self.enqueue(packet_to_send,True)
+
+        # schedule next EB
+        self._start_sendEB_timer()
 
     def _get_event_tag(self, event_name):
         return u'{0}-{1}'.format(self.mote.id, event_name)

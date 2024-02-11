@@ -142,6 +142,7 @@ class Mote(object):
             self.tsch.setIsSync(True)       # dagRoot
             self.tsch.add_minimal_cell()    # dagRpot
             self.tsch.startSendingEBs()     # dagRoot
+            self.tsch._start_sendEB_timer()    # dagRoot
 
         else:
             # I'm NOT the DAG root
