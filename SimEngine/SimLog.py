@@ -58,7 +58,7 @@ LOG_RPL_DAO_TX                    = {u'type': u'rpl.dao.tx',                u'ke
 LOG_RPL_DAO_RX                    = {u'type': u'rpl.dao.rx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DIS_TX                    = {u'type': u'rpl.dis.tx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DIS_RX                    = {u'type': u'rpl.dis.rx',                u'keys': [u'_mote_id',u'packet']}
-LOG_RPL_CHURN                     = {u'type': u'rpl.churn',                 u'keys': [u'_mote_id',u'rank',u'preferredParent']}
+LOG_RPL_CHURN                     = {u'type': u'rpl.churn',                 u'keys': [u'_mote_id',u'preferredParent', u'asn']}
 LOG_RPL_LOCAL_REPAIR              = {u'type': u'rpl.local_repair',          u'keys': [u'_mote_id']}
 
 # === 6LoWPAN
@@ -109,7 +109,8 @@ LOG_CONN_MATRIX_K7_UPDATE         = {u'type': u'conn.matrix.update',        u'ke
 # === user 
 LOG_USER_MINIMALCELL_PACKETS         = {u'type': u'user.minimalcell_packets',   u'keys': [u'channel',u'count_per_packet_type',u'is_interference']}
 LOG_USER_MINIMALCELL_TRANS_RESULT    = {u'type': u'user.minimalcell_trans_result',   u'keys': [u'txResults']}
-LOG_USER_NEIGHBOR_NUM             = {u'type': u'user.neighbor_num',   u'keys': [u'_mote_id', u'neighbor_num']}
+LOG_USER_NEIGHBOR_NUM                = {u'type': u'user.neighbor_num',   u'keys': [u'_mote_id', u'neighbor_num']}
+LOG_USER_RPL_RANK                    = {u'type': u'user.rpl_rank',   u'keys': [u'_mote_id', u'rank']}
 
 # ============================ SimLog =========================================
 

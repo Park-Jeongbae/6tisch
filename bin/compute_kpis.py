@@ -50,6 +50,8 @@ def init_mote():
         'join_asn': None,
         'join_time_s': None,
         'sync_asn': None,
+        'rpl_asn' : None,
+        'rpl_time_s' : None,
         'sync_time_s': None,
         'charge_asn': None,
         'upstream_pkts': {},
@@ -58,7 +60,9 @@ def init_mote():
         'charge': None,
         'lifetime_AA_years': None,
         'avg_current_uA': None,
-        'neighbor_num': 0
+        'neighbor_num': 0,
+        'rank' : d.RPL_INFINITE_RANK,
+        'rpl_join' : False
     }
 
 # =========================== KPIs ============================================
@@ -252,17 +256,13 @@ def kpis_all(inputfile):
             mote_id = logline['_mote_id']
             preferredParent = logline['preferredParent']
 
-            if mote_id == DAGROOT_ID:
-                continue
-            
-            # 선호부모를 선택한 모트 목록을 저장해둠
-            if 'rpl_joined_motes' not in networkStats[run_id]:
-                networkStats[run_id]['rpl_joined_motes'] = {}
-                
             if preferredParent is None:
-                networkStats[run_id]['rpl_joined_motes'][mote_id] = False
+                allstats[run_id][mote_id]['rpl_join'] = False
             else :
-                networkStats[run_id]['rpl_joined_motes'][mote_id] = True
+                allstats[run_id][mote_id]['rpl_join'] = True
+                allstats[run_id][mote_id]['rpl_asn']  = asn
+                allstats[run_id][mote_id]['rpl_time_s'] = asn*file_settings['tsch_slotDuration']
+
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT['type']:
 
             if 'minimalcell_trans_result' not in networkStats[run_id]:
@@ -302,6 +302,15 @@ def kpis_all(inputfile):
                 continue
 
             allstats[run_id][mote_id]['neighbor_num'] = neighbor_num
+        elif logline['_type'] == SimLog.LOG_USER_RPL_RANK['type']:
+            
+            mote_id = logline['_mote_id']
+            rank = logline['rank']
+
+            if mote_id == DAGROOT_ID:
+                continue
+            
+            allstats[run_id][mote_id]['rank'] = rank
 
     # === compute advanced motestats
 
@@ -348,6 +357,7 @@ def kpis_all(inputfile):
         app_packets_received = 0
         app_packets_lost = 0
         joining_times = []
+        rpl_times = []
         sync_times = []
         us_latencies = []
         current_consumed = []
@@ -373,6 +383,9 @@ def kpis_all(inputfile):
 
             if motestats['sync_asn'] is not None:
                 sync_times.append(motestats['sync_asn'])
+
+            if motestats['rpl_asn'] is not None:
+                rpl_times.append(motestats['rpl_asn'])
 
             # latency
 
@@ -497,6 +510,28 @@ def kpis_all(inputfile):
                     )
                 }
             ],
+            'rpl-time': [
+                {
+                    'name': 'Rpl Time',
+                    'unit': 'slots',
+                    'min': (
+                        min(rpl_times)
+                        if rpl_times else 'N/A'
+                    ),
+                    'max': (
+                        max(rpl_times)
+                        if rpl_times else 'N/A'
+                    ),
+                    'mean': (
+                        mean(rpl_times)
+                        if rpl_times else 'N/A'
+                    ),
+                    '99%': (
+                        np.percentile(rpl_times, 99)
+                        if rpl_times else 'N/A'
+                    )
+                }
+            ],
             'sync-time': [
                 {
                     'name': 'Sync Time',
@@ -542,7 +577,6 @@ def kpis_all(inputfile):
         # 실험을 위해 저장한 정보를 allstats에 이관함
         allstats[run_id]['global-stats']['minimalcell_packets'] = networkStats[run_id]['minimalcell_packets']
         allstats[run_id]['global-stats']['sync_motes'] = networkStats[run_id]['sync_motes']
-        allstats[run_id]['global-stats']['rpl_joined_motes'] = networkStats[run_id]['rpl_joined_motes']
         allstats[run_id]['global-stats']['minimalcell_trans_result'] = networkStats[run_id]['minimalcell_trans_result']
 
     #---------------------평균 계산---------------------
@@ -588,11 +622,26 @@ def kpis_all(inputfile):
     # 네트워크에 토폴로지에 참여한 노드의 평균 시간을 계산함
     avgStates['asn_sync_motes']  = sum(stats['global-stats']['sync-time'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
 
-    # 네트워크 토폴로지에 참여한 노드의 평균 개수를 계산함
-    avgStates['rpl_joined_motes'] = sum(sum(value == True for value in stats['global-stats']['rpl_joined_motes'].values()) for stats in allstats.values()) / num_runs
+    # 네트워크 토폴로지에 참여한 노드의 평균 개수와 RANK 값의 평균을 계산함
+    rpl_num_sum = 0
+    rpl_rank_avg_sum = 0
+    for (run_id, run_motes) in list(allstats.items()):
+        rpl_rank_sum = 0
+        mote_num = 0
+        for (mote_id, motestats) in list(run_motes.items()):
+            if 'rpl_join' in motestats:
+                mote_num += 1
+                
+                if motestats['rpl_join']:
+                    rpl_num_sum += 1
+                
+                rpl_rank_sum += motestats['rank']
+        rpl_rank_avg_sum += rpl_rank_sum / mote_num
+    avgStates['num_rpl_motes']  =   rpl_num_sum / num_runs
+    avgStates['rpl_rank']  =   rpl_rank_avg_sum / num_runs
 
     # 네트워크에 토폴로지에 참여한 노드의 평균 시간을 계산함
-    avgStates['asn_rpl_joined_motes']  = sum(stats['global-stats']['joining-time'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
+    avgStates['asn_rpl_motes']  = sum(stats['global-stats']['rpl-time'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
 
     # 루트 노드를 제외한 노드들의 평균 이웃 개수를 구함
     neighbor_num_avg = 0
@@ -606,6 +655,15 @@ def kpis_all(inputfile):
         neighbor_num_avg += neighbor_num_sum/num_mote
 
     avgStates['neighbor_num']  =  neighbor_num_avg / num_runs
+
+    # 시뮬레이션의 평균 PDR을 계산함
+    avgStates['e2e-upstream-delivery']  = sum(stats['global-stats']['e2e-upstream-delivery'][0]['value'] for run_id, stats in allstats.items()) / num_runs
+
+    # 시뮬레이션의 평균 지연시간을 계산함
+    avgStates['e2e-upstream-latency']  = sum(stats['global-stats']['e2e-upstream-latency'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
+
+    # 시뮬레이션의 평균 에너지 소모량을 계산함
+    avgStates['current-consumed']  = sum(stats['global-stats']['current-consumed'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
 
     # === remove unnecessary stats
 

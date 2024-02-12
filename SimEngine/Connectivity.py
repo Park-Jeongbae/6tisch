@@ -153,10 +153,9 @@ class Connectivity(object):
         if asn % self.settings.tsch_slotframeLength == 0 :
             # 전송된 패킷이 있을 경우 
             if len(transmissions_by_channel) > 0: 
-                count_per_packet_type = {}
-
                 # 미니멀셀에서 패킷이 전송된 채널 별로 정리
                 for channel in transmissions_by_channel.keys():
+                    count_per_packet_type = {}
 
                     is_interference = False
                     if  len(transmissions_by_channel[channel]) > 1:

@@ -362,7 +362,11 @@ class Tsch(object):
         return None
 
     def enqueue(self, packet, priority=False):
+        # 가끔 에러 발생해서 예외처리 넣어둠
+        if 'srcMac' not in packet[u'mac']:
+            self.dequeue(packet)
 
+        # assert u'srcMac' in packet[u'mac']
         assert u'srcMac' in packet[u'mac']
         assert u'dstMac' in packet[u'mac']
 

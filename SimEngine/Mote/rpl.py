@@ -133,8 +133,8 @@ class Rpl(object):
             SimEngine.SimLog.LOG_RPL_CHURN,
             {
                 "_mote_id":        self.mote.id,
-                "rank":            self.of.rank,
-                "preferredParent": new_preferred
+                "preferredParent": new_preferred,
+                'asn':             self.engine.getAsn()
             }
         )
 
@@ -748,6 +748,13 @@ class RplOF0(RplOFBase):
 
         if neighbor == self.preferred_parent:
             self.rank = self._calculate_rank(self.preferred_parent)
+            self.rpl.log(
+                SimEngine.SimLog.LOG_USER_RPL_RANK,
+                {
+                    "_mote_id":        self.rpl.mote.id,
+                    "rank":            self.rank,
+                }
+            )
 
     def _calculate_rank(self, neighbor):
         if (
@@ -807,6 +814,13 @@ class RplOF0(RplOFBase):
         elif self.rank is None:
             new_parent = candidate
             self.rank = new_rank
+            self.rpl.log(
+                SimEngine.SimLog.LOG_USER_RPL_RANK,
+                {
+                    "_mote_id":        self.rpl.mote.id,
+                    "rank":            self.rank,
+                }
+            )
         else:
             # (new_rank is not None) and (self.rank is None)
             rank_difference = self.rank - new_rank
