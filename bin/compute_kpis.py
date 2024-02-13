@@ -231,31 +231,37 @@ def kpis_all(inputfile):
                 # 동시에 전송한 패킷이 2개 이상일 경우 충돌이 발생함
                 if value > 1 :
                     collision_detected = True
-        
+
+                # 미니멀 셀에서 전송된 패킷의 수를 타입별로 저장함
                 if key not in networkStats[run_id]['minimalcell_packets']['count_per_packet_type']:
                     networkStats[run_id]['minimalcell_packets']['count_per_packet_type'][key] = value
                 else:
                     networkStats[run_id]['minimalcell_packets']['count_per_packet_type'][key] += value
 
-                # 간섭이 발생한 환경에서 전송된 패킷 개수를 저장해둔다.
+                # 간섭이 발생한 환경에서 전송된 패킷 개수를 저장함
                 if collision_detected:
                     if 'num_collision_packet' not in networkStats[run_id]['minimalcell_packets']:
                         networkStats[run_id]['minimalcell_packets']['num_collision_packet'] = value
                     else:
                         networkStats[run_id]['minimalcell_packets']['num_collision_packet'] += value
 
-            # 미니멀셀 패킷 충돌 횟수를 저장한다.
+            # 미니멀 셀에서 간섭이 발생한 채널의 개수를 저장함
             if collision_detected:
                 if 'num_collision_cell' not in networkStats[run_id]['minimalcell_packets']:
                     networkStats[run_id]['minimalcell_packets']['num_collision_cell'] = 1
                 else:
                     networkStats[run_id]['minimalcell_packets']['num_collision_cell'] += 1
-
+    
+        # RPL 선호 부모 선택 여부 및 RPL 네트워크 참여 시간을 저장함
         elif logline['_type'] == SimLog.LOG_RPL_CHURN['type']:
 
             mote_id = logline['_mote_id']
             preferredParent = logline['preferredParent']
 
+            if mote_id == DAGROOT_ID:
+                continue
+            
+            # 변경할 부모의 주소가 있다면, RPL 네트워크에 참여했으며 참여한 시간을 저장한다.
             if preferredParent is None:
                 allstats[run_id][mote_id]['rpl_join'] = False
             else :
@@ -263,6 +269,7 @@ def kpis_all(inputfile):
                 allstats[run_id][mote_id]['rpl_asn']  = asn
                 allstats[run_id][mote_id]['rpl_time_s'] = asn*file_settings['tsch_slotDuration']
 
+        # 미니멀 셀에서 전송된 패킷의 수신 결과를 저장함
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT['type']:
 
             if 'minimalcell_trans_result' not in networkStats[run_id]:
@@ -293,6 +300,8 @@ def kpis_all(inputfile):
                     networkStats[run_id]['minimalcell_trans_result']['no_if_success'] += 1
                 else:
                     networkStats[run_id]['minimalcell_trans_result']['if_success'] += 1
+
+        # 장치별 이웃 수를 저장함
         elif logline['_type'] == SimLog.LOG_USER_NEIGHBOR_NUM['type']:
 
             mote_id = logline['_mote_id']
@@ -302,6 +311,8 @@ def kpis_all(inputfile):
                 continue
 
             allstats[run_id][mote_id]['neighbor_num'] = neighbor_num
+        
+        # 장치별 RPL Rank 값을 저장함
         elif logline['_type'] == SimLog.LOG_USER_RPL_RANK['type']:
             
             mote_id = logline['_mote_id']
@@ -630,11 +641,9 @@ def kpis_all(inputfile):
         mote_num = 0
         for (mote_id, motestats) in list(run_motes.items()):
             if 'rpl_join' in motestats:
-                mote_num += 1
-                
                 if motestats['rpl_join']:
                     rpl_num_sum += 1
-                
+                mote_num += 1
                 rpl_rank_sum += motestats['rank']
         rpl_rank_avg_sum += rpl_rank_sum / mote_num
     avgStates['num_rpl_motes']  =   rpl_num_sum / num_runs
@@ -644,7 +653,7 @@ def kpis_all(inputfile):
     avgStates['asn_rpl_motes']  = sum(stats['global-stats']['rpl-time'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
 
     # 루트 노드를 제외한 노드들의 평균 이웃 개수를 구함
-    neighbor_num_avg = 0
+    neighbor_num_avg_sum = 0
     for (run_id, per_mote_stats) in list(allstats.items()):
         neighbor_num_sum = 0
         num_mote = 0
@@ -652,9 +661,8 @@ def kpis_all(inputfile):
             if 'neighbor_num' in motestats:
                 neighbor_num_sum += motestats['neighbor_num']
                 num_mote += 1
-        neighbor_num_avg += neighbor_num_sum/num_mote
-
-    avgStates['neighbor_num']  =  neighbor_num_avg / num_runs
+        neighbor_num_avg_sum += neighbor_num_sum/num_mote
+    avgStates['neighbor_num']  =  neighbor_num_avg_sum / num_runs
 
     # 시뮬레이션의 평균 PDR을 계산함
     avgStates['e2e-upstream-delivery']  = sum(stats['global-stats']['e2e-upstream-delivery'][0]['value'] for run_id, stats in allstats.items()) / num_runs
