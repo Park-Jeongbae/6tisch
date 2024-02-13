@@ -1125,6 +1125,55 @@ class Tsch(object):
 
     def _get_physical_channel(self, cell):
         # see section 6.2.6.3 of IEEE 802.15.4-2015
+        if self.getIsSync():
+            # 미니멀 셀일 경우
+            if self.engine.getAsn() % self.settings.tsch_slotframeLength == 0:
+
+                numChans = self.settings.user_minimlNumChans
+                ASFN = (self.engine.getAsn() / self.settings.tsch_slotframeLength) % numChans
+                my_chan_offset = self.mote.id % numChans
+
+                # 해당 ASN에서 통신할 페어 채널 오프셋을 찾는다.
+                if my_chan_offset + ASFN <= numChans - 1:
+                    pair_chan_offset  =  numChans - 1 - my_chan_offset  - ASFN
+                else:
+                    pair_chan_offset = (numChans * 2 - 1) - my_chan_offset - ASFN
+
+                # 이웃 중 동일한 채널 오프셋을 사용하는 이웃이 있을 경우 해당 채널 오프셋을 사용하고.
+                # 동일한 채널 오프셋을 사용하는 이웃이 없을 경우, 내 이웃 중 가장 많은 수의 이웃의 채널 스케줄링과 동일한 채널오프셋을 사용한다.
+                
+                neighbors_chan_offset =  {}
+
+                # 이웃 주소들을 이용해서 채널 오프셋의 종류와 수를 구한다.
+                for mac_addr in self.neighbor_table:
+                    last_two_chars = mac_addr[-2:]
+                    neighbor_id = int(last_two_chars, 16) 
+                    neighbor_channel_offset = neighbor_id % numChans
+                    if neighbor_channel_offset % numChans not in neighbors_chan_offset:
+                        neighbors_chan_offset[neighbor_channel_offset] = 1
+                    else:
+                        neighbors_chan_offset[neighbor_channel_offset] += 1
+
+                # 나의 채널 오프셋으로 계산한 페어 오프셋을 사용한 장치가 주변에 있다면 그대로 사용한다.
+                if  self.settings.user_neighbors_num_channel_selection == False or not neighbors_chan_offset or pair_chan_offset in neighbors_chan_offset:
+                    channel_offset = min(my_chan_offset, pair_chan_offset)
+                else:
+                    # 나의 채널 오프셋으로 계산한 페어 오프셋을 사용한 장치가 주변에 없다면, 가장 많은 장치가 사용하는 스케줄과 동일한 채널 오프셋을 사용한다.
+                    max_chan_offset_num = max(neighbors_chan_offset.values())
+                    max_chan_offsets = [key for key, value in neighbors_chan_offset.items() if value == max_chan_offset_num]
+                    max_chan_offset = random.choice(max_chan_offsets)
+
+                    if max_chan_offset + ASFN <= numChans - 1:
+                        pair_chan_offset  =  numChans - 1 - max_chan_offset  - ASFN
+                    else:
+                        pair_chan_offset = (numChans * 2 - 1) - max_chan_offset - ASFN
+                    channel_offset = min(max_chan_offset, pair_chan_offset)
+
+                return self.hopping_sequence[
+                    (self.engine.getAsn() + int(channel_offset)) %
+                    len(self.hopping_sequence)
+                ]
+
         return self.hopping_sequence[
             (self.engine.getAsn() + cell.channel_offset) %
             len(self.hopping_sequence)

@@ -57,7 +57,10 @@
 
             "phy_numChans":                                16,
 
-            "motes_eui64":                                 []
+            "motes_eui64":                                 [],
+            
+            "user_minimlNumChans":                          16,
+            "user_neighbors_num_channel_selection":         true
         }
     },
     "logging":                                             "all",
