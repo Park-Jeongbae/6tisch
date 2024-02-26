@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 #!/usr/bin/python
 """
 \brief Entry point to the simulator. Starts a batch of simulations concurrently.
@@ -186,8 +188,29 @@ def merge_output_files(folder_path):
                 with open(file_path, 'r') as inputfile:
                     config = json.loads(inputfile.readline())
                     outputfile.write(json.dumps(config) + "\n")
-                    outputfile.write(inputfile.read())
+                    
+                    # Read and write file contents line by line to avoid memory error
+                    for line in inputfile:
+                        outputfile.write(line)
+
         shutil.rmtree(os.path.join(folder_path, subfolder))
+def extract_number_after_underscore(text):
+    # 마지막 '_'의 인덱스를 찾습니다.
+    last_underscore_index = text.rfind('_')
+    if last_underscore_index == -1:
+        return None  # '_'가 없는 경우 None을 반환합니다.
+
+    # '_' 이후의 문자열을 추출합니다.
+    number_part = text[last_underscore_index + 1:]
+
+    # 추출된 문자열에서 숫자 부분을 찾습니다.
+    number = ''.join(char for char in number_part if char.isdigit())
+
+    if not number:
+        return None  # 숫자가 없는 경우 None을 반환합니다.
+
+    # 숫자를 정수로 변환하여 반환합니다.
+    return int(number)
 
 # =========================== main ============================================
 
@@ -300,11 +323,21 @@ def main():
 
     # merge output files
     folder_path = os.path.join('simData', simconfig.get_log_directory_name())
-    merge_output_files(folder_path)
 
-    # copy config file into output directory
-    with open(os.path.join(folder_path, 'config.json'), 'w') as f:
-        f.write(simconfig.get_config_data())
+    while os.path.exists(folder_path):
+        # merge output files
+        merge_output_files(folder_path)
+
+        # copy config file into output directory
+        with open(os.path.join(folder_path, 'config.json'), 'w') as f:
+            f.write(simconfig.get_config_data())
+
+        # 첫번째 폴더명이 뭐였냐에 따라 다름
+        if '_' not in folder_path:
+            folder_path = folder_path + '_1'
+        else:
+            id = extract_number_after_underscore(folder_path)
+            folder_path = folder_path.replace('_' + str(id), '_' + str(id+1))
 
     #=== post-simulation actions
 

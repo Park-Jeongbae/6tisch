@@ -19,6 +19,8 @@ if __name__ == '__main__':
 import json
 import glob
 import numpy as np
+import json
+import csv
 
 from SimEngine import SimLog
 import SimEngine.Mote.MoteDefines as d
@@ -720,6 +722,38 @@ def main():
         with open(avgoutfile, 'w') as f:
             f.write(json.dumps(avg, indent=4))
         print('KPIs saved in {0}'.format(avgoutfile))
+
+        # 평균 데이터를 excel로 저장함
+        
+        # JSON 데이터를 읽어옴
+        with open(avgoutfile, 'r') as file:
+            data = json.load(file)
+
+        output_file = avgoutfile + '.csv'
+
+        # 데이터를 평면 구조로 변환
+        flattened_data = flatten_dict(data)
+
+        # CSV 파일로 저장
+        with open(output_file, 'wb') as csvfile:
+            writer = csv.writer(csvfile)
+            # 헤더 쓰기
+            writer.writerow(['Key', 'Value'])
+            # 키-값 쓰기 (정렬된 순서로)
+            for key, value in sorted(flattened_data.items()):
+                writer.writerow([key, value])
+       
+
+# 중첩된 딕셔너리를 평면 구조로 변환하는 재귀 함수
+def flatten_dict(d, parent_key='', sep='.'):
+    items = []
+    for k, v in d.items():
+        new_key = parent_key + sep + k if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
 if __name__ == '__main__':
     main()
