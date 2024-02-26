@@ -362,9 +362,6 @@ class Tsch(object):
         return None
 
     def enqueue(self, packet, priority=False):
-        # 가끔 에러 발생해서 예외처리 넣어둠
-        if 'srcMac' not in packet[u'mac']:
-            self.dequeue(packet)
 
         # assert u'srcMac' in packet[u'mac']
         assert u'srcMac' in packet[u'mac']
@@ -1422,7 +1419,8 @@ class Tsch(object):
         packet_to_send = None
         if self._decided_to_send_eb():
             packet_to_send = self._create_EB()
-            self.enqueue(packet_to_send,True)
+            if packet_to_send is not None:
+                self.enqueue(packet_to_send,True)
 
         # schedule next EB
         self._start_sendEB_timer()
