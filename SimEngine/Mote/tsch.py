@@ -1127,7 +1127,7 @@ class Tsch(object):
             if self.engine.getAsn() % self.settings.tsch_slotframeLength == 0:
 
                 numChans = self.settings.user_minimlNumChans
-                ASFN = (self.engine.getAsn() / self.settings.tsch_slotframeLength) % numChans
+                ASFN = (self.engine.getAsn() // self.settings.tsch_slotframeLength) % numChans
                 my_chan_offset = self.mote.id % numChans
 
                 # 해당 ASN에서 통신할 페어 채널 오프셋을 찾는다.
