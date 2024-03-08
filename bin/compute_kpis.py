@@ -230,6 +230,9 @@ def kpis_all(inputfile):
                 if 'count_per_packet_type' not in networkStats[run_id]['minimalcell_packets']:
                     networkStats[run_id]['minimalcell_packets']['count_per_packet_type'] = {}
 
+                if 'num_collision_packet' not in networkStats[run_id]['minimalcell_packets']:
+                    networkStats[run_id]['minimalcell_packets']['num_collision_packet'] = {}
+
                 # 동시에 전송한 패킷이 2개 이상일 경우 충돌이 발생함
                 if value > 1 :
                     collision_detected = True
@@ -240,12 +243,12 @@ def kpis_all(inputfile):
                 else:
                     networkStats[run_id]['minimalcell_packets']['count_per_packet_type'][key] += value
 
-                # 간섭이 발생한 환경에서 전송된 패킷 개수를 저장함
+                # 간섭이 발생한 환경에서 전송된 패킷 개수를 타입별로 저장함
                 if collision_detected:
-                    if 'num_collision_packet' not in networkStats[run_id]['minimalcell_packets']:
-                        networkStats[run_id]['minimalcell_packets']['num_collision_packet'] = value
+                    if key not in networkStats[run_id]['minimalcell_packets']['num_collision_packet']:
+                        networkStats[run_id]['minimalcell_packets']['num_collision_packet'][key] = value
                     else:
-                        networkStats[run_id]['minimalcell_packets']['num_collision_packet'] += value
+                        networkStats[run_id]['minimalcell_packets']['num_collision_packet'][key] += value
 
             # 미니멀 셀에서 간섭이 발생한 채널의 개수를 저장함
             if collision_detected:
@@ -276,6 +279,8 @@ def kpis_all(inputfile):
 
             if 'minimalcell_trans_result' not in networkStats[run_id]:
                 networkStats[run_id]['minimalcell_trans_result'] = {}
+            if 'count_per_packet_type' not in networkStats[run_id]['minimalcell_trans_result']:
+                networkStats[run_id]['minimalcell_trans_result']['count_per_packet_type'] = {}
 
             txResults = logline['txResults']
             
@@ -283,6 +288,7 @@ def kpis_all(inputfile):
 
                 is_interference = txResult['is_interference']
                 is_recv_success = txResult['is_recv_success']
+                packet_type = txResult['count_per_packet_type']
 
                 if 'no_if_fail' not in networkStats[run_id]['minimalcell_trans_result']:
                     networkStats[run_id]['minimalcell_trans_result']['no_if_fail'] = 0
@@ -303,6 +309,13 @@ def kpis_all(inputfile):
                 else:
                     networkStats[run_id]['minimalcell_trans_result']['if_success'] += 1
 
+                # 수신된 패킷을 종류별로 저장한다.
+                if is_recv_success:
+                    if packet_type not in networkStats[run_id]['minimalcell_trans_result']['count_per_packet_type']:
+                        networkStats[run_id]['minimalcell_trans_result']['count_per_packet_type'][packet_type] = 0
+                    else:
+                        networkStats[run_id]['minimalcell_trans_result']['count_per_packet_type'][packet_type] += 1
+
         # 장치별 이웃 수를 저장함
         elif logline['_type'] == SimLog.LOG_USER_NEIGHBOR_NUM['type']:
 
@@ -320,7 +333,7 @@ def kpis_all(inputfile):
             mote_id = logline['_mote_id']
             rank = logline['rank']
 
-            if mote_id == DAGROOT_ID:
+            if mote_id == DAGROOT_ID or rank is None:
                 continue
             
             allstats[run_id][mote_id]['rank'] = rank
@@ -616,7 +629,17 @@ def kpis_all(inputfile):
 
     # num_collision_packet 평균 계산
     avgStates['minimalcell_packets']['num_collision_packet'] = {}
-    avgStates['minimalcell_packets']['num_collision_packet'] = sum(stats['global-stats']['minimalcell_packets']['num_collision_packet'] for run_id, stats in allstats.items()) / num_runs
+    packet_type_set = set()
+    for run_id, stats in allstats.items():
+        packet_type_set.update(stats['global-stats']['minimalcell_packets']['num_collision_packet'].keys())
+
+    for packet_type in packet_type_set:
+        total_count = 0
+        for run_id, stats in allstats.items():
+            if packet_type in stats['global-stats']['minimalcell_packets']['num_collision_packet']:
+                total_count += stats['global-stats']['minimalcell_packets']['num_collision_packet'][packet_type]
+        avgStates['minimalcell_packets']['num_collision_packet'][packet_type] = total_count / num_runs
+
 
     # num_collision_cell 평균 계산
     avgStates['minimalcell_packets']['num_collision_cell'] = {}
@@ -628,6 +651,19 @@ def kpis_all(inputfile):
     avgStates['minimalcell_trans_result']['if_fail'] = sum(stats['global-stats']['minimalcell_trans_result']['if_fail'] for run_id, stats in allstats.items()) / num_runs
     avgStates['minimalcell_trans_result']['no_if_success'] = sum(stats['global-stats']['minimalcell_trans_result']['no_if_success'] for run_id, stats in allstats.items()) / num_runs
     avgStates['minimalcell_trans_result']['if_success'] = sum(stats['global-stats']['minimalcell_trans_result']['if_success'] for run_id, stats in allstats.items()) / num_runs
+
+    # 수신된 패킷의 평균 계산
+    avgStates['minimalcell_trans_result']['count_per_packet_type'] = {}
+    rcv_packet_type_set = set()
+    for run_id, stats in allstats.items():
+        rcv_packet_type_set.update(stats['global-stats']['minimalcell_trans_result']['count_per_packet_type'].keys())
+
+    for packet_type in rcv_packet_type_set:
+        total_count = 0
+        for run_id, stats in allstats.items():
+            if packet_type in stats['global-stats']['minimalcell_trans_result']['count_per_packet_type']:
+                total_count += stats['global-stats']['minimalcell_trans_result']['count_per_packet_type'][packet_type]
+        avgStates['minimalcell_trans_result']['count_per_packet_type'][packet_type] = total_count / num_runs
 
     # 네트워크에 싱크된 노드의 평균 개수를 계산함
     avgStates['num_sync_motes'] = sum(sum(value == True for value in stats['global-stats']['sync_motes'].values()) for stats in allstats.values()) / num_runs
@@ -646,7 +682,8 @@ def kpis_all(inputfile):
                 if motestats['rpl_join']:
                     rpl_num_sum += 1
                 mote_num += 1
-                rpl_rank_sum += motestats['rank']
+                if motestats['rank']:
+                    rpl_rank_sum += motestats['rank']
         rpl_rank_avg_sum += rpl_rank_sum / mote_num
     avgStates['num_rpl_motes']  =   rpl_num_sum / num_runs
     avgStates['rpl_rank']  =   rpl_rank_avg_sum / num_runs
