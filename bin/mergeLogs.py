@@ -274,9 +274,9 @@ def main():
 
     print('A new log directory is: {0}'.format(logDir))
 
-    if cliparams['noPrompt'] is False:
-        print('Hit "return" to proceed')
-        input()
+    # if cliparams['noPrompt'] is False:
+    #     print('Hit "return" to proceed')
+    #     input()
 
     # create new log files under logDir which have all the log data under the
     # target sub-directories.
