@@ -681,7 +681,8 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
 
     def _unlock_cells(self, cell_list):
         for cell in cell_list:
-            self.locked_slots.remove(cell[u'slotOffset'])
+            if cell[u'slotOffset'] in self.locked_slots:
+                self.locked_slots.remove(cell[u'slotOffset'])
 
     def _add_cells(self, neighbor, cell_list, cell_options):
         try:

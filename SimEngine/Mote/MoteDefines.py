@@ -4,7 +4,10 @@
 NUM_SUFFICIENT_TX                           = 10      # sufficient num. of tx to estimate pdr by ACK
 WAITING_FOR_TX                              = u'waiting_for_tx'
 WAITING_FOR_RX                              = u'waiting_for_rx'
-
+TRGB_RED                                    = 0
+TRGB_GREEN                                  = 1
+TRGB_BLUE                                   = 2
+DAGROOT_ID                                  = 0
 # === addressing
 BROADCAST_ADDRESS                           = u'FF-FF'
 

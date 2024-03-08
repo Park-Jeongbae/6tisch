@@ -543,6 +543,7 @@ class RplOFBase(object):
         self.rank = None
         old_parent_mac_addr = self.get_preferred_parent()
         self.preferred_parent = None
+        self.rpl.mote.tsch.parentEbAsn = None
         self.rpl.indicate_preferred_parent_change(
             old_preferred = old_parent_mac_addr,
             new_preferred = None
@@ -869,6 +870,7 @@ class RplOF0(RplOFBase):
 
             # reset Trickle Timer
             self.rpl.trickle_timer.reset()
+            self.rpl.mote.tsch.parentEbAsn = None
         elif (
                 (new_parent is None)
                 and

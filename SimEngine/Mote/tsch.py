@@ -82,6 +82,7 @@ class Tsch(object):
         # pending bit
         self.pending_bit_enabled            = False
         self.args_for_next_pending_bit_task = None
+        self.parentEbAsn = None
 
         assert self.settings.phy_numChans <= len(d.TSCH_HOPPING_SEQUENCE)
         self.hopping_sequence = (
@@ -153,6 +154,7 @@ class Tsch(object):
             self._stop_sendEB_timer()
             self.txQueue = []
             self.received_eb_list = {}
+            self.parentEbAsn = None
             # we may have this timer task
             self.engine.removeFutureEvent(
                 uniqueTag=(self.mote.id, u'tsch', u'wait_secjoin')
@@ -935,6 +937,22 @@ class Tsch(object):
                                             d.LINKTYPE_ADVERTISING_ONLY
                                         ]
                                     )
+                                    and
+                                    (   
+                                        # 루트는 G에서 EB를 전송하도록 설정
+                                        (
+                                            self.mote.dagRoot and
+                                            self.engine.getAsn() % 3 == d.TRGB_GREEN
+                                        )
+                                        or
+                                        # 루트가 아닐 경우 부모로 부터 EB를 수신한 색 반대에서 전송하도록 설정
+                                        (
+                                            (not self.mote.dagRoot) and
+                                            self.parentEbAsn is not None and
+                                            self.engine.getAsn() % 3 != d.TRGB_RED and
+                                            self.parentEbAsn % 3 != self.engine.getAsn() % 3
+                                        )
+                                    )                           
                                 ):
                                 # we can send the EB on this link (cell)
                                 packet_to_send = _packet_to_send
@@ -955,8 +973,13 @@ class Tsch(object):
                             _packet_to_send[u'backoff_remaining_delay'] -= 1
                             # skip this cell for transmission
                         else:
-                            packet_to_send = _packet_to_send
-                            active_cell = cell
+                            if _packet_to_send[u'type'] == d.PKT_TYPE_DIO or _packet_to_send[u'type'] == d.PKT_TYPE_DIS:
+                                if self.engine.getAsn() % 3 == d.TRGB_RED:
+                                    packet_to_send = _packet_to_send
+                                    active_cell = cell
+                            else:
+                                packet_to_send = _packet_to_send
+                                active_cell = cell
 
             if (
                     cell.is_rx_on()
@@ -1043,9 +1066,41 @@ class Tsch(object):
         if self.active_cell:
             if self.pktToSend is None:
                 assert self.active_cell.is_rx_on()
+
+                # 미니멀 셀일 경우            
+                if self.active_cell.slot_offset == 0:
+                    if self.mote.id == d.DAGROOT_ID:
+                        # 루트는 G에서 송신하므로 G에서 수신 불가
+                        if self.engine.getAsn() % 3 == d.TRGB_GREEN:
+                            pass
+                    # 루트가 아닐 경우               
+                    else:
+                        # R이 아니고 선호 부모의 EB를 수신하였고 TX 순서일 경우 수신 불가
+                        if  self.engine.getAsn() % 3 != d.TRGB_RED and self.parentEbAsn is not None and self.parentEbAsn % 3 != self.engine.getAsn() % 3:
+                            pass
+
                 self._action_RX()
             else:
                 assert self.active_cell.is_tx_on()
+
+                # 미니멀 셀일 경우            
+                if self.active_cell.slot_offset == 0:
+                    if self.mote.id == d.DAGROOT_ID:
+                        # 루트는 G에서 송신하므로 B일 경우 전송 불가
+                        if self.engine.getAsn() % 3 == d.TRGB_BLUE:
+                            pass
+                    # 루트가 아닐 경우               
+                    else:
+                        # 선호 부모의 EB를 수신하지 못한 경우
+                        if self.parentEbAsn is None:
+                            # R이 아니면 전송 불가
+                            if self.engine.getAsn() % 3 != d.TRGB_RED:
+                                pass
+                        else:
+                            # R이 아니고 수신 셀에서는 전송 불가
+                            if self.engine.getAsn() % 3 != d.TRGB_RED and self.parentEbAsn % 3 == self.engine.getAsn() % 3:
+                                pass
+
                 self._action_TX(
                     pktToSend = self.pktToSend,
                     channel   = self._get_physical_channel(self.active_cell)
@@ -1122,10 +1177,67 @@ class Tsch(object):
 
     def _get_physical_channel(self, cell):
         # see section 6.2.6.3 of IEEE 802.15.4-2015
+        # TRGB 관련
+        if self.getIsSync():
+            if self.engine.getAsn() % self.settings.tsch_slotframeLength == 0:
+                ASFC = self.engine.getAsn() // self.settings.tsch_slotframeLength
+                numChans = self.settings.phy_numChans
+
+                # 루트일 경우
+                if self.mote.dagRoot:
+                    # R
+                    if self.engine.getAsn() % 3 == d.TRGB_RED:
+                        channel_offset = 0
+                    # G, B
+                    else:
+                        channel_offset = ((self.simple_hash(self.mote.get_mac_addr()) + ASFC) % (numChans - 1)) + 1
+                else:
+                    # 싱크는 됐지만, 선호 부모를 선택하지 못한 상태
+                    if self.mote.tsch.parentEbAsn is None and self.mote.rpl.of.get_preferred_parent() is None:
+                        channel_offset = 0
+                    # 선호 부모를 선택했지만, 선호 부모로부터 EB를 받지 못한 상태
+                    elif self.mote.tsch.parentEbAsn is None:
+                        # R
+                        if self.engine.getAsn() % 3 == d.TRGB_RED:
+                            channel_offset = 0
+                        # G, B
+                        else:
+                            channel_offset = ((self.simple_hash(self.mote.rpl.of.get_preferred_parent()) + ASFC) % (numChans - 1)) + 1
+                    # 선호 부모를 선택했고, 선호 부모로부터 EB를 받은 상태
+                    else: 
+                        # R
+                        if self.engine.getAsn() % 3 == d.TRGB_RED:
+                            channel_offset = 0
+                        # G
+                        elif self.engine.getAsn() % 3 == d.TRGB_GREEN:
+                            # G에서 부모의 EB를 수신한 경우
+                            if self.mote.tsch.parentEbAsn % 3 == d.TRGB_GREEN:
+                                channel_offset = ((self.simple_hash(self.mote.rpl.of.get_preferred_parent()) + ASFC) % (numChans - 1)) + 1
+                            else:
+                                channel_offset = ((self.simple_hash(self.mote.get_mac_addr()) + ASFC) % (numChans - 1)) + 1
+                        # B
+                        else:
+                            # B에서 부모의 EB를 수신한 경우
+                            if self.mote.tsch.parentEbAsn % 3 == d.TRGB_BLUE:
+                                channel_offset = ((self.simple_hash(self.mote.rpl.of.get_preferred_parent()) + ASFC) % (numChans - 1)) + 1
+                            else:
+                                channel_offset = ((self.simple_hash(self.mote.get_mac_addr()) + ASFC) % (numChans - 1)) + 1
+
+                return self.hopping_sequence[
+                    (self.engine.getAsn() + channel_offset) %
+                    len(self.hopping_sequence)
+                ]
+
         return self.hopping_sequence[
             (self.engine.getAsn() + cell.channel_offset) %
             len(self.hopping_sequence)
         ]
+
+    def simple_hash(self, text):
+        hash_value = 0
+        for char in text:
+            hash_value += ord(char)  # 각 문자의 ASCII 값을 더함
+        return hash_value % 1000  # 해시 값을 1000으로 나눈 나머지를 반환
 
     # EBs
 
@@ -1204,6 +1316,10 @@ class Tsch(object):
                 self.engine.removeFutureEvent(event_tag)
             else:
                 assert len(self.received_eb_list) < d.TSCH_NUM_NEIGHBORS_TO_WAIT
+        else:
+            if self.mote.rpl.of.get_preferred_parent() is not None:
+                if packet[u'mac'][u'srcMac'] == self.mote.rpl.of.get_preferred_parent():                        
+                    self.parentEbAsn = self.engine.getAsn()
 
     # Retransmission backoff algorithm
     def _is_retransmission(self, packet):
