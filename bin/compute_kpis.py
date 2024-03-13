@@ -58,10 +58,12 @@ def init_mote():
         'rpl_time_s' : None,
         'sync_time_s': None,
         'charge_asn': None,
+        'charge_asn_before_sync': None,
         'upstream_pkts': {},
         'latencies': [],
         'hops': [],
         'charge': None,
+        'charge_before_sync': None,
         'lifetime_AA_years': None,
         'avg_current_uA': None,
         'neighbor_num': 0,
@@ -199,7 +201,8 @@ def kpis_all(inputfile):
             # only log non-dagRoot charge
             if mote_id == DAGROOT_ID:
                 continue
-
+            
+            # 전체 에너지 소모량
             charge =  logline['idle_listen'] * d.CHARGE_IdleListen_uC
             charge += logline['tx_data_rx_ack'] * d.CHARGE_TxDataRxAck_uC
             charge += logline['rx_data_tx_ack'] * d.CHARGE_RxDataTxAck_uC
@@ -209,6 +212,22 @@ def kpis_all(inputfile):
 
             allstats[run_id][mote_id]['charge_asn'] = asn
             allstats[run_id][mote_id]['charge']     = charge
+
+            # 싱크 전 에너지 소모량
+            is_sync = False
+            if 'sync_motes' in networkStats[run_id] and mote_id in networkStats[run_id]['sync_motes'] and networkStats[run_id]['sync_motes'][mote_id]:
+                is_sync = True
+
+            if not is_sync:
+                charge_before_sync =  logline['idle_listen'] * d.CHARGE_IdleListen_uC
+                charge_before_sync += logline['tx_data_rx_ack'] * d.CHARGE_TxDataRxAck_uC
+                charge_before_sync += logline['rx_data_tx_ack'] * d.CHARGE_RxDataTxAck_uC
+                charge_before_sync += logline['tx_data'] * d.CHARGE_TxData_uC
+                charge_before_sync += logline['rx_data'] * d.CHARGE_RxData_uC
+                charge_before_sync += logline['sleep'] * d.CHARGE_Sleep_uC
+
+                allstats[run_id][mote_id]['charge_asn_before_syn'] = asn
+                allstats[run_id][mote_id]['charge_before_sync']    = charge
 
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_TX['type']:
             if 'minimalcell_tx' not in networkStats[run_id]:
@@ -409,7 +428,8 @@ def kpis_all(inputfile):
         rpl_first_times = []
         sync_times = []
         us_latencies = []
-        current_consumed = []
+        charge_consumed = []
+        charge_consumed_before_sync = []
         lifetimes = []
         slot_duration = file_settings['tsch_slotDuration']
 
@@ -444,11 +464,16 @@ def kpis_all(inputfile):
 
             # current consumed
 
-            current_consumed.append(motestats['charge'])
+            charge_consumed.append(motestats['charge'])
             if motestats['lifetime_AA_years'] is not None:
                 lifetimes.append(motestats['lifetime_AA_years'])
-            current_consumed = [
-                value for value in current_consumed if value is not None
+            charge_consumed = [
+                value for value in charge_consumed if value is not None
+            ]
+
+            charge_consumed_before_sync.append(motestats['charge_before_sync'])
+            charge_consumed_before_sync = [
+                value for value in charge_consumed_before_sync if value is not None
             ]
 
         #-- save stats
@@ -514,17 +539,31 @@ def kpis_all(inputfile):
                     )
                 }
             ],
-            'current-consumed': [
+            'charge-consumed': [
                 {
-                    'name': 'Current Consumed',
-                    'unit': 'mA',
+                    'name': 'Charge Consumed',
+                    'unit': 'mC',
                     'mean': (
-                        mean(current_consumed)
-                        if current_consumed else 'N/A'
+                        mean(charge_consumed)
+                        if charge_consumed else 'N/A'
                     ),
                     '99%': (
-                        np.percentile(current_consumed, 99)
-                        if current_consumed else 'N/A'
+                        np.percentile(charge_consumed, 99)
+                        if charge_consumed else 'N/A'
+                    )
+                }
+            ],
+            'charge-consumed-before-sync': [
+                {
+                    'name': 'Charge Consumed',
+                    'unit': 'mA',
+                    'mean': (
+                        mean(charge_consumed_before_sync)
+                        if charge_consumed_before_sync else 'N/A'
+                    ),
+                    '99%': (
+                        np.percentile(charge_consumed_before_sync, 99)
+                        if charge_consumed_before_sync else 'N/A'
                     )
                 }
             ],
@@ -776,8 +815,10 @@ def kpis_all(inputfile):
     avgStates['e2e-upstream-latency']  = sum(stats['global-stats']['e2e-upstream-latency'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
 
     # 시뮬레이션의 평균 에너지 소모량을 계산함
-    avgStates['current-consumed']  = sum(stats['global-stats']['current-consumed'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
+    avgStates['charge-consumed']  = sum(stats['global-stats']['charge-consumed'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
 
+    # 시뮬레이션의 평균 싱크 전 에너지 소모량을 계산함
+    avgStates['charge-consumed-before-sync']  = sum(stats['global-stats']['charge-consumed-before-sync'][0]['mean'] for run_id, stats in allstats.items()) / num_runs
     # === remove unnecessary stats
 
     for (run_id, per_mote_stats) in list(allstats.items()):
