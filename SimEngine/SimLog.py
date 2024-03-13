@@ -107,10 +107,10 @@ LOG_CONN_MATRIX_K7_UPDATE         = {u'type': u'conn.matrix.update',        u'ke
 
 
 # === user 
-LOG_USER_MINIMALCELL_PACKETS         = {u'type': u'user.minimalcell_packets',   u'keys': [u'channel',u'count_per_packet_type',u'is_interference']}
-LOG_USER_MINIMALCELL_TRANS_RESULT    = {u'type': u'user.minimalcell_trans_result',   u'keys': [u'txResults']}
-LOG_USER_NEIGHBOR_NUM                = {u'type': u'user.neighbor_num',   u'keys': [u'_mote_id', u'neighbor_num']}
-LOG_USER_RPL_RANK                    = {u'type': u'user.rpl_rank',   u'keys': [u'_mote_id', u'rank']}
+LOG_USER_MINIMALCELL_TX           = {u'type': u'user.minimalcell_tx',   u'keys': [u'channel',u'num_per_packet_type',u'is_interference']}
+LOG_USER_MINIMALCELL_RX           = {u'type': u'user.minimalcell_rx',   u'keys': [u'rx_status']}
+LOG_USER_NEIGHBOR_NUM             = {u'type': u'user.neighbor_num',   u'keys': [u'_mote_id', u'neighbor_num']}
+LOG_USER_RPL_RANK                 = {u'type': u'user.rpl_rank',   u'keys': [u'_mote_id', u'rank']}
 
 # ============================ SimLog =========================================
 
