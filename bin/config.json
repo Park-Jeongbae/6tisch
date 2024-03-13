@@ -24,7 +24,7 @@
 
             "rpl_of":                                      "OF0",
             "rpl_daoPeriod":                               60,
-            "rpl_extensions":                              ["dis_unicast"],
+            "rpl_extensions":                              ["dis_broadcast"],
 
             "fragmentation":                               "FragmentForwarding",
             "sixlowpan_reassembly_buffers_num":            1,

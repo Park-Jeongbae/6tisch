@@ -155,7 +155,7 @@ class Connectivity(object):
             if len(transmissions_by_channel) > 0: 
                 # 미니멀셀에서 패킷이 전송된 채널 별로 정리
                 for channel in transmissions_by_channel.keys():
-                    count_per_packet_type = {}
+                    num_per_packet_type = {}
 
                     is_interference = False
                     if  len(transmissions_by_channel[channel]) > 1:
@@ -164,17 +164,17 @@ class Connectivity(object):
                     # 각 채널에서 전송된 패킷의 종류와 개수를 저장함
                     for t in transmissions_by_channel[channel]:
                         packet_type = t[u'packet'][u'type']
-                        if packet_type not in count_per_packet_type:
-                            count_per_packet_type[packet_type] = 1
+                        if packet_type not in num_per_packet_type:
+                            num_per_packet_type[packet_type] = 1
                         else:
-                            count_per_packet_type[packet_type] += 1
+                            num_per_packet_type[packet_type] += 1
 
                     # 로그를 남김
                     self.log(
-                        SimLog.LOG_USER_MINIMALCELL_PACKETS,
+                        SimLog.LOG_USER_MINIMALCELL_TX,
                         {
                             u'channel' : channel,
-                            u'count_per_packet_type' : count_per_packet_type,
+                            u'num_per_packet_type' : num_per_packet_type,
                             u'is_interference' : is_interference
                         }
                     )
@@ -199,7 +199,7 @@ class Connectivity(object):
             for t in transmissions_by_channel[channel]:
                 self.engine.motes[t[u'tx_mote_id']].radio.txDone(False)
 
-        txResults = []
+        rx_status = []
         # prosses packets sent on channels with listeners
         for channel in set(transmissions_by_channel.keys()) & set(receivers_by_channel.keys()):
             assert channel in d.TSCH_HOPPING_SEQUENCE[:self.num_channels]
@@ -314,8 +314,8 @@ class Connectivity(object):
                     # 미니멀 셀에서 데이터가 수신 성공한 경우
                     if asn % self.settings.tsch_slotframeLength == 0 :
 
-                        txResults.append({  u'channel' : channel,
-                                            u'count_per_packet_type' : packet_type,
+                        rx_status.append({  u'channel' : channel,
+                                            u'num_per_packet_type' : packet_type,
                                             u'is_interference' : is_interference_packet,
                                             u'is_recv_success' : True })      
 
@@ -345,8 +345,8 @@ class Connectivity(object):
 
                     # 미니멀 셀에서 데이터가 수신 실패한 경우
                     if asn % self.settings.tsch_slotframeLength == 0 :
-                        txResults.append({  u'channel' : channel,
-                                            u'count_per_packet_type' : packet_type,
+                        rx_status.append({  u'channel' : channel,
+                                            u'num_per_packet_type' : packet_type,
                                             u'is_interference' : is_interference_packet,
                                             u'is_recv_success' : False })
 
@@ -383,11 +383,11 @@ class Connectivity(object):
                 self.engine.motes[t[u'tx_mote_id']].radio.txDone(isACKed)
 
         #여기 로그를 남긴다
-        if txResults:
+        if rx_status:
             self.log(
-                SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT,
+                SimLog.LOG_USER_MINIMALCELL_RX,
                 {
-                    u'txResults' : txResults,
+                    u'rx_status' : rx_status,
                 }
             )
 
