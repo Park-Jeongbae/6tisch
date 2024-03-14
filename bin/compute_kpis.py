@@ -333,6 +333,15 @@ def kpis_all(inputfile):
                 is_recv_success = txResult['is_recv_success']
                 packet_type = txResult['num_per_packet_type']
 
+                if 'fail' not in networkStats[run_id]['minimalcell_rx']:
+                    networkStats[run_id]['minimalcell_rx']['fail'] = 0
+                if 'success' not in networkStats[run_id]['minimalcell_rx']:
+                    networkStats[run_id]['minimalcell_rx']['success'] = 0
+                if 'if' not in networkStats[run_id]['minimalcell_rx']:
+                    networkStats[run_id]['minimalcell_rx']['if'] = 0
+                if 'no_if' not in networkStats[run_id]['minimalcell_rx']:
+                    networkStats[run_id]['minimalcell_rx']['no_if'] = 0
+
                 if 'no_if_fail' not in networkStats[run_id]['minimalcell_rx']:
                     networkStats[run_id]['minimalcell_rx']['no_if_fail'] = 0
                 if 'if_fail' not in networkStats[run_id]['minimalcell_rx']:
@@ -341,6 +350,18 @@ def kpis_all(inputfile):
                     networkStats[run_id]['minimalcell_rx']['no_if_success'] = 0
                 if 'if_success' not in networkStats[run_id]['minimalcell_rx']:
                     networkStats[run_id]['minimalcell_rx']['if_success'] = 0
+
+                # 간섭 발생 여부와 무관하게 수신했는지 정리함
+                if is_recv_success == False:
+                    networkStats[run_id]['minimalcell_rx']['fail'] += 1
+                else:
+                    networkStats[run_id]['minimalcell_rx']['success'] += 1
+
+                # 성공 여부와 무관하게 간섭됐는지만 정리함
+                if is_interference == False:
+                    networkStats[run_id]['minimalcell_rx']['if'] += 1
+                else:
+                    networkStats[run_id]['minimalcell_rx']['no_if'] += 1
 
                 # 간섭 발생 여부와 패킷을 정상적으로 수신했는지 정리함
                 if is_interference == False and is_recv_success == False:
@@ -780,6 +801,22 @@ def kpis_all(inputfile):
 
     # 수신 및 간섭률에 대한 평균 계산
     avgStates['minimalcell_rx'] = {}
+    avgStates['minimalcell_rx']['fail'] = {}
+    fail_data = [stats['global-stats']['minimalcell_rx']['fail'] for run_id, stats in allstats.items()]
+    avgStates['minimalcell_rx']['fail'] = calculate_stats(fail_data)
+
+    avgStates['minimalcell_rx']['success'] = {}
+    success_data = [stats['global-stats']['minimalcell_rx']['success'] for run_id, stats in allstats.items()]
+    avgStates['minimalcell_rx']['success'] = calculate_stats(success_data)
+    
+    avgStates['minimalcell_rx']['if'] = {}
+    if_data = [stats['global-stats']['minimalcell_rx']['if'] for run_id, stats in allstats.items()]
+    avgStates['minimalcell_rx']['if'] = calculate_stats(if_data)
+
+    avgStates['minimalcell_rx']['no_if'] = {}
+    no_if_data = [stats['global-stats']['minimalcell_rx']['no_if'] for run_id, stats in allstats.items()]
+    avgStates['minimalcell_rx']['no_if'] = calculate_stats(no_if_data)
+
     avgStates['minimalcell_rx']['no_if_fail'] = {}
     no_if_fail_data = [stats['global-stats']['minimalcell_rx']['no_if_fail'] for run_id, stats in allstats.items()]
     avgStates['minimalcell_rx']['no_if_fail'] = calculate_stats(no_if_fail_data)
