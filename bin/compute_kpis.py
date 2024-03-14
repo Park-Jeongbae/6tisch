@@ -444,6 +444,7 @@ def kpis_all(inputfile):
         charge_consumed = []
         charge_consumed_before_sync = []
         lifetimes = []
+        avg_hops = []
         slot_duration = file_settings['tsch_slotDuration']
 
         #-- compute stats
@@ -488,6 +489,9 @@ def kpis_all(inputfile):
             charge_consumed_before_sync = [
                 value for value in charge_consumed_before_sync if value is not None
             ]
+
+            if motestats['avg_hops'] is not None:
+                avg_hops.append(motestats['avg_hops'])
 
         #-- save stats
 
@@ -695,6 +699,12 @@ def kpis_all(inputfile):
                 {
                     'name': 'Number of application packets lost',
                     'total': app_packets_lost
+                }
+            ],
+            'avg-hops': [
+                {
+                    'name': 'Average number of hops per mote',
+                    'mean': mean(avg_hops)
                 }
             ]
         }
@@ -1005,6 +1015,11 @@ def kpis_all(inputfile):
 
  #=========================================================================================================================
 
+    # 모트당 평균 홉 수를 저장
+    avg_hops_data = [stats['global-stats']['avg-hops'][0]['mean'] for run_id, stats in allstats.items()]
+    avgStates['avg-hops']  = calculate_stats(avg_hops_data)
+
+ #=========================================================================================================================
     # === remove unnecessary stats
 
     for (run_id, per_mote_stats) in list(allstats.items()):
