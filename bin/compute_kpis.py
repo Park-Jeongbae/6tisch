@@ -846,7 +846,7 @@ def kpis_all(inputfile):
         data = []
         data_rate = []
         for run_id, stats in allstats.items():
-            if packet_type in stats['global-stats']['minimalcell_rx']['num_per_packet_type']:
+            if packet_type in stats['global-stats']['minimalcell_rx']['num_per_packet_type'] and packet_type in stats['global-stats']['minimalcell_tx']['num_per_packet_type']:
                 data.append(stats['global-stats']['minimalcell_rx']['num_per_packet_type'][packet_type])
                 data_rate.append(stats['global-stats']['minimalcell_rx']['num_per_packet_type'][packet_type]/stats['global-stats']['minimalcell_tx']['num_per_packet_type'][packet_type])
             else:
@@ -863,11 +863,11 @@ def kpis_all(inputfile):
     for run_id, stats in allstats.items():
         rpl = 0
         rpl_tx = 0
-        if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type']:
+        if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type'] and 'DIO' in stats['global-stats']['minimalcell_tx']['num_per_packet_type']:
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIO']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type']['DIO']
 
-        if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type']:
+        if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type'] and 'DIS' in stats['global-stats']['minimalcell_tx']['num_per_packet_type']:
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type']['DIS']
 
@@ -891,7 +891,7 @@ def kpis_all(inputfile):
         data = []
         data_rate = []
         for run_id, stats in allstats.items():
-            if packet_type in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']:
+            if packet_type in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if'] and packet_type in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']:
                 data.append(stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if'][packet_type])
                 data_rate.append((stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if'][packet_type])/stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if'][packet_type])
             else:
@@ -908,11 +908,11 @@ def kpis_all(inputfile):
     for run_id, stats in allstats.items():
         rpl = 0
         rpl_tx = 0
-        if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']:
+        if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if'] and 'DIO' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']:
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIO']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']['DIO']
 
-        if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']:
+        if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if'] and 'DIS' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']:
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']['DIS']
 
@@ -935,7 +935,7 @@ def kpis_all(inputfile):
     for packet_type in rcv_packet_type_set:
         data = []
         for run_id, stats in allstats.items():
-            if packet_type in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']:
+            if packet_type in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'] and packet_type in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']:
                 data.append(stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'][packet_type])
                 data_rate.append((stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'][packet_type])/stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if'][packet_type])
             else:
@@ -952,11 +952,11 @@ def kpis_all(inputfile):
         rpl = 0
         rpl_tx = 0
 
-        if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']:
+        if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'] and 'DIO' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']:
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIO']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']['DIO']
 
-        if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']:
+        if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'] and 'DIS' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']:
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']['DIS']
 
