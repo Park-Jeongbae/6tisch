@@ -68,7 +68,9 @@ def init_mote():
         'avg_current_uA': None,
         'neighbor_num': 0,
         'rank' : d.RPL_INFINITE_RANK,
-        'rpl_join' : False
+        'rpl_join' : False,
+        'avg_hops' : None,
+        'minimal_cell_utilization' : {}
     }
 
 # =========================== KPIs ============================================
@@ -412,6 +414,14 @@ def kpis_all(inputfile):
                 continue
 
             allstats[run_id][mote_id]['rank'] = rank
+        elif logline['_type'] == SimLog.LOG_MSF_MINIMAL_CELL_UTILIZATION['type']:
+            mote_id = logline['_mote_id']
+            minimal_cell_utilization = logline['cell_utilization']
+
+            if mote_id == DAGROOT_ID or minimal_cell_utilization is None:
+                continue
+
+            allstats[run_id][mote_id]['minimal_cell_utilization'][asn] = minimal_cell_utilization
 
     # === compute advanced motestats
 
@@ -467,6 +477,7 @@ def kpis_all(inputfile):
         lifetimes = []
         avg_hops = []
         slot_duration = file_settings['tsch_slotDuration']
+        minimal_cell_utilization = []
 
         #-- compute stats
 
@@ -514,6 +525,8 @@ def kpis_all(inputfile):
             if motestats['avg_hops'] is not None:
                 avg_hops.append(motestats['avg_hops'])
 
+            # minimal cell utilization
+            minimal_cell_utilization.append(mean(motestats['minimal_cell_utilization'].values()))
         #-- save stats
 
         allstats[run_id]['global-stats'] = {
@@ -727,6 +740,12 @@ def kpis_all(inputfile):
                     'name': 'Average number of hops per mote',
                     'mean': mean(avg_hops)
                 }
+            ],
+            'minimal-cell-utilization': [
+                {
+                    'name': 'Average utilization of minimal cell per mote',
+                    'mean': mean(minimal_cell_utilization)
+                }
             ]
         }
 
@@ -871,8 +890,12 @@ def kpis_all(inputfile):
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type']['DIS']
 
-        rpl_data.append(rpl)
-        rpl_data_rate.append(rpl/rpl_tx)
+        if rpl_tx != 0:
+            rpl_data.append(rpl)        
+            rpl_data_rate.append(rpl/rpl_tx)
+        else:
+            rpl_data.append(0)        
+            rpl_data_rate.append(0) 
 
     avgStates['minimalcell_rx']['num_per_packet_type']['rpl'] = calculate_stats(rpl_data)
     avgStates['minimalcell_rx']['rx_rate_per_packet_type']['rpl'] = calculate_stats(rpl_data_rate)
@@ -916,8 +939,13 @@ def kpis_all(inputfile):
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']['DIS']
 
-        rpl_data.append(rpl)
-        rpl_data_rate.append(rpl/rpl_tx)
+        if rpl_tx != 0:
+            rpl_data.append(rpl)        
+            rpl_data_rate.append(rpl/rpl_tx)
+        else:
+            rpl_data.append(0)        
+            rpl_data_rate.append(0) 
+
 
     avgStates['minimalcell_rx']['num_per_packet_type_in_if']['rpl'] = calculate_stats(rpl_data)
     avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_if']['rpl'] = calculate_stats(rpl_data_rate)
@@ -960,8 +988,13 @@ def kpis_all(inputfile):
             rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']['DIS']
 
-        rpl_data.append(rpl)
-        rpl_data_rate.append(rpl/rpl_tx)
+        if rpl_tx != 0:
+            rpl_data.append(rpl)        
+            rpl_data_rate.append(rpl/rpl_tx)
+        else:
+            rpl_data.append(0)        
+            rpl_data_rate.append(0) 
+
 
     avgStates['minimalcell_rx']['num_per_packet_type_in_no_if']['rpl'] = calculate_stats(rpl_data)
     avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_no_if']['rpl'] = calculate_stats(rpl_data_rate)
@@ -1056,6 +1089,13 @@ def kpis_all(inputfile):
     avg_hops_data = [stats['global-stats']['avg-hops'][0]['mean'] for run_id, stats in allstats.items()]
     avgStates['avg-hops']  = calculate_stats(avg_hops_data)
 
+ #=========================================================================================================================
+
+    # 모트당 평균 미니멀셀 활용도를 저장
+    minimal_cell_utilization_data = [stats['global-stats']['minimal-cell-utilization'][0]['mean'] for run_id, stats in allstats.items()]
+    avgStates['minimal-cell-utilization']  = calculate_stats(minimal_cell_utilization_data)
+
+ #=========================================================================================================================
  #=========================================================================================================================
     # === remove unnecessary stats
 

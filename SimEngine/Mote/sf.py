@@ -154,6 +154,9 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
         self.rx_cell_utilization  = 0
         self.locked_slots         = set([]) # slots in on-going ADD transactions
         self.retry_count          = {}      # indexed by MAC address
+        self.num_minimal_cells_elapsed = 0
+        self.num_minimal_cells_used    = 0
+        self.minimal_cell_utilization  = 0
 
     # ======================= public ==========================================
 
@@ -231,6 +234,25 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                     self.tx_cell_utilization = tx_cell_utilization
                 self._adapt_to_traffic(preferred_parent, self.TX_CELL_OPT)
                 self._reset_cell_counters(self.TX_CELL_OPT)
+        elif cell.slot_offset == 0 and cell.channel_offset == 0 and self.mote.tsch.getIsSync():
+            # 미니멀셀도 elapsed 횟수를 카운트함
+            self._update_minimal_cell_counters(bool(sent_packet))
+            # adapt number of cells if necessary
+            if d.MSF_MAX_NUMCELLS <= self.num_minimal_cells_elapsed:
+                minimal_cell_utilization = (
+                    self.num_minimal_cells_used /
+                    float(self.num_minimal_cells_elapsed)
+                )
+                self.log(
+                    SimEngine.SimLog.LOG_MSF_MINIMAL_CELL_UTILIZATION,
+                    {
+                        u'_mote_id'    : self.mote.id,
+                        u'cell_utilization' : minimal_cell_utilization
+                    }
+                )
+                self.minimal_cell_utilization = minimal_cell_utilization
+                self._adapt_to_traffic_minimal_cell()
+                self._reset_minimal_cell_counters()
 
     def indication_rx_cell_elapsed(self, cell, received_packet):
         preferred_parent = self.mote.rpl.getPreferredParent()
@@ -276,6 +298,8 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                 # source mote must have lost the negotaited RX cells, TX
                 # on its viewpoint. Remove them now.
                 self._clear_cells(received_packet[u'mac'][u'srcMac'])
+        elif cell.slot_offset == 0 and cell.channel_offset == 0 and self.mote.tsch.getIsSync():
+            self._handle_rx_minimal_cell_elapsed_event(bool(received_packet))
 
     def indication_parent_change(self, old_parent, new_parent):
         assert old_parent != new_parent
@@ -509,6 +533,10 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             self.num_rx_cells_elapsed = 0
             self.num_rx_cells_used = 0
 
+    def _reset_minimal_cell_counters(self):
+        self.num_minimal_cells_elapsed = 0
+        self.num_minimal_cells_used = 0
+
     def _handle_rx_cell_elapsed_event(self, used_by_parent):
         preferred_parent = self.mote.rpl.getPreferredParent()
         self._update_cell_counters(self.RX_CELL_OPT, used_by_parent)
@@ -534,6 +562,25 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             self._adapt_to_traffic(preferred_parent, self.RX_CELL_OPT)
             self._reset_cell_counters(self.RX_CELL_OPT)
 
+    def _handle_rx_minimal_cell_elapsed_event(self, used):
+        self._update_minimal_cell_counters(used)
+        # adapt number of cells if necessary
+        minimal_cell_utilization = (
+            self.num_minimal_cells_used /
+            float(self.num_minimal_cells_elapsed)
+        )
+        if d.MSF_MAX_NUMCELLS <= self.num_minimal_cells_elapsed:
+            self.log(
+                SimEngine.SimLog.LOG_MSF_MINIMAL_CELL_UTILIZATION,
+                {
+                    u'_mote_id'    : self.mote.id,
+                    u'cell_utilization' : minimal_cell_utilization
+                }
+            )
+            self.minimal_cell_utilization = minimal_cell_utilization
+            self._adapt_to_traffic_minimal_cell()
+            self._reset_minimal_cell_counters()
+
     def _update_cell_counters(self, cell_opt, used):
         if cell_opt == self.TX_CELL_OPT:
             self.num_tx_cells_elapsed += 1
@@ -544,6 +591,11 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             self.num_rx_cells_elapsed += 1
             if used:
                 self.num_rx_cells_used += 1
+
+    def _update_minimal_cell_counters(self, used):
+            self.num_minimal_cells_elapsed += 1
+            if used:
+                self.num_minimal_cells_used += 1
 
     def _adapt_to_traffic(self, neighbor, cell_opt):
         # reset retry counter
@@ -600,6 +652,11 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                         cell_options = self.RX_CELL_OPT
                     )
 
+    def _adapt_to_traffic_minimal_cell(self):
+        # 임시로 정의만 해둠
+        # if d.MSF_LIM_NUMCELLSUSED_HIGH < self.minimal_cell_utilization:
+        # elif self.tx_cell_utilization < d.MSF_LIM_NUMCELLSUSED_LOW:
+        return 0
 
     def _housekeeping_collision(self):
         """

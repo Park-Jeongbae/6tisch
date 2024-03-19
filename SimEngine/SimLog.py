@@ -70,6 +70,7 @@ LOG_SIXLOWPAN_FRAG_GEN            = {u'type': u'sixlowpan.frag.gen',        u'ke
 # === MSF
 LOG_MSF_TX_CELL_UTILIZATION       = {u'type': u'msf.tx_cell_utilization',   u'keys': [u'_mote_id',u'neighbor',u'value']}
 LOG_MSF_RX_CELL_UTILIZATION       = {u'type': u'msf.rx_cell_utilization',   u'keys': [u'_mote_id',u'neighbor',u'value']}
+LOG_MSF_MINIMAL_CELL_UTILIZATION  = {u'type': u'msf.minimal_cell_utilization',   u'keys': [u'_mote_id',u'cell_utilization']}
 LOG_MSF_ERROR_SCHEDULE_FULL       = {u'type': u'msf.error.schedule_full',   u'keys': [u'_mote_id']}
 
 # === sixp
