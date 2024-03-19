@@ -70,7 +70,6 @@ LOG_SIXLOWPAN_FRAG_GEN            = {u'type': u'sixlowpan.frag.gen',        u'ke
 # === MSF
 LOG_MSF_TX_CELL_UTILIZATION       = {u'type': u'msf.tx_cell_utilization',   u'keys': [u'_mote_id',u'neighbor',u'value']}
 LOG_MSF_RX_CELL_UTILIZATION       = {u'type': u'msf.rx_cell_utilization',   u'keys': [u'_mote_id',u'neighbor',u'value']}
-LOG_MSF_MINIMAL_CELL_UTILIZATION  = {u'type': u'msf.minimal_cell_utilization',   u'keys': [u'_mote_id',u'cell_utilization']}
 LOG_MSF_ERROR_SCHEDULE_FULL       = {u'type': u'msf.error.schedule_full',   u'keys': [u'_mote_id']}
 
 # === sixp
@@ -112,6 +111,7 @@ LOG_USER_MINIMALCELL_TX           = {u'type': u'user.minimalcell_tx',   u'keys':
 LOG_USER_MINIMALCELL_RX           = {u'type': u'user.minimalcell_rx',   u'keys': [u'rx_status']}
 LOG_USER_NEIGHBOR_NUM             = {u'type': u'user.neighbor_num',   u'keys': [u'_mote_id', u'neighbor_num']}
 LOG_USER_RPL_RANK                 = {u'type': u'user.rpl_rank',   u'keys': [u'_mote_id', u'rank']}
+LOG_USER_MINIMAL_CELL_CONGESTION  = {u'type': u'user.minimal_cell_congestion',  u'keys': [u'_mote_id', u'num_minimal_cells_rx', u'num_minimal_cells_tx', u'minimal_cell_utilization', u'neighbor_num']}
 
 # ============================ SimLog =========================================
 

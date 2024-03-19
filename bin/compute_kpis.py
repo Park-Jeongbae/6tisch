@@ -70,7 +70,10 @@ def init_mote():
         'rank' : d.RPL_INFINITE_RANK,
         'rpl_join' : False,
         'avg_hops' : None,
-        'minimal_cell_utilization' : {}
+        'num_minimal_cells_rx' : {},
+        'num_minimal_cells_tx' : {},
+        'minimal_cell_utilization' : {},
+        'neighbor_num_per_minimal_cell' : {}
     }
 
 # =========================== KPIs ============================================
@@ -414,14 +417,20 @@ def kpis_all(inputfile):
                 continue
 
             allstats[run_id][mote_id]['rank'] = rank
-        elif logline['_type'] == SimLog.LOG_MSF_MINIMAL_CELL_UTILIZATION['type']:
+        elif logline['_type'] == SimLog.LOG_USER_MINIMAL_CELL_CONGESTION['type']:
             mote_id = logline['_mote_id']
-            minimal_cell_utilization = logline['cell_utilization']
+            num_minimal_cells_rx =  logline['num_minimal_cells_rx']
+            num_minimal_cells_tx =  logline['num_minimal_cells_tx']
+            minimal_cell_utilization = logline['minimal_cell_utilization']
+            neighbor_num = logline['neighbor_num']
 
             if mote_id == DAGROOT_ID or minimal_cell_utilization is None:
                 continue
 
+            allstats[run_id][mote_id]['num_minimal_cells_rx'][asn] = num_minimal_cells_rx
+            allstats[run_id][mote_id]['num_minimal_cells_tx'][asn] = num_minimal_cells_tx
             allstats[run_id][mote_id]['minimal_cell_utilization'][asn] = minimal_cell_utilization
+            allstats[run_id][mote_id]['neighbor_num_per_minimal_cell'][asn] = neighbor_num
 
     # === compute advanced motestats
 
@@ -1096,6 +1105,67 @@ def kpis_all(inputfile):
     avgStates['minimal-cell-utilization']  = calculate_stats(minimal_cell_utilization_data)
 
  #=========================================================================================================================
+    # 모든 데이터 수집
+    filled_data_tx = []
+    filled_data_rx = []
+    filled_data_neighbor = []
+
+    for (run_id, per_mote_stats) in allstats.items():
+        for (mote_id, motestats) in per_mote_stats.items():
+            if 'num_minimal_cells_tx' in motestats:
+                filled_data_tx.append(motestats['num_minimal_cells_tx'])
+            if 'num_minimal_cells_rx' in motestats:
+                filled_data_rx.append(motestats['num_minimal_cells_rx'])
+            if 'neighbor_num_per_minimal_cell' in motestats:
+                filled_data_neighbor.append(motestats['neighbor_num_per_minimal_cell'])
+
+    # x 값 설정
+    x_values = range(0, 505001, 101)
+
+    # 데이터프레임 생성 및 데이터 채우기
+    df = pd.DataFrame({'x': x_values})
+
+    for i, data in enumerate(filled_data_tx, start=1):
+        filled_data_i = fill_missing_values(data, x_values)
+        df['Mote {}'.format(i)] = filled_data_i
+
+    # 합계 열 추가
+    df['Row Sum'] = df.apply(calculate_row_sum, axis=1)
+
+    # 엑셀 파일로 저장
+    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx')
+    df.to_excel(writer, sheet_name='num_minimal_cells_tx', index=False)
+    writer.save()
+
+    # 데이터프레임 생성 및 데이터 채우기
+    df2 = pd.DataFrame({'x': x_values})
+
+    for i, data in enumerate(filled_data_rx, start=1):
+        filled_data_i = fill_missing_values(data, x_values)
+        df2['Mote {}'.format(i)] = filled_data_i
+
+    # 합계 열 추가
+    df2['Row Sum'] = df2.apply(calculate_row_sum, axis=1)
+
+    # 엑셀 파일로 저장
+    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
+    df2.to_excel(writer, sheet_name='num_minimal_cells_rx', index=False)
+    writer.save()
+
+    # 데이터프레임 생성 및 데이터 채우기
+    df3 = pd.DataFrame({'x': x_values})
+
+    for i, data in enumerate(filled_data_neighbor, start=1):
+        filled_data_i = fill_missing_values(data, x_values)
+        df3['Mote {}'.format(i)] = filled_data_i
+
+    # 평균 열 추가
+    df3['Row mean'] = df3.apply(calculate_row_mean, axis=1)
+
+    # 엑셀 파일로 저장
+    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
+    df3.to_excel(writer, sheet_name='neighbor_num_per_minimal_cell', index=False)
+    writer.save()
  #=========================================================================================================================
     # === remove unnecessary stats
 
@@ -1112,6 +1182,26 @@ def kpis_all(inputfile):
                 del motestats['join_asn']
 
     return avgStates, allstats
+
+# 미니멀셀 혼잡도 조사를 위해 데이터를 채워넣는 함수
+def fill_missing_values(data, x_values):
+    filled_data = [0] * len(x_values)
+    prev_x = None
+    prev_y = None
+    for i, x in enumerate(x_values):
+        if x in data:
+            prev_x = x
+            prev_y = data[x]
+        filled_data[i] = prev_y if prev_x is not None else 0
+    return filled_data
+
+# 데이터 합계 계산 함수
+def calculate_row_sum(row):
+    return sum(row[1:])
+
+# 데이터 평균 계산 함수
+def calculate_row_mean(row):
+    return mean(row[1:])
 
 def calculate_stats(data):
     # 평균 계산
