@@ -111,7 +111,7 @@ LOG_USER_MINIMALCELL_TX           = {u'type': u'user.minimalcell_tx',   u'keys':
 LOG_USER_MINIMALCELL_RX           = {u'type': u'user.minimalcell_rx',   u'keys': [u'rx_status']}
 LOG_USER_NEIGHBOR_NUM             = {u'type': u'user.neighbor_num',   u'keys': [u'_mote_id', u'neighbor_num']}
 LOG_USER_RPL_RANK                 = {u'type': u'user.rpl_rank',   u'keys': [u'_mote_id', u'rank']}
-LOG_USER_MINIMAL_CELL_CONGESTION  = {u'type': u'user.minimal_cell_congestion',  u'keys': [u'_mote_id', u'num_minimal_cells_rx', u'num_minimal_cells_tx', u'minimal_cell_utilization', u'neighbor_num']}
+LOG_USER_MINIMAL_CELL_CONGESTION  = {u'type': u'user.minimal_cell_congestion',  u'keys': [u'_mote_id', u'num_minimal_cells_rx', u'num_minimal_cells_tx', u'minimal_cell_utilization', u'neighbor_num',u'neighbor_rssi_sum']}
 
 # ============================ SimLog =========================================
 

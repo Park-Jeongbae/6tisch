@@ -239,11 +239,27 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             # 미니멀셀도 elapsed 횟수를 카운트함
             self._update_minimal_cell_counters(self.TX_CELL_OPT, bool(sent_packet))
             # adapt number of cells if necessary
-            if d.MSF_MAX_NUMCELLS <= self.num_minimal_cells_elapsed:
+            if d.MSF_MAX_MINIMAL_NUMCELLS <= self.num_minimal_cells_elapsed:
                 minimal_cell_utilization = (
                     (self.num_minimal_cells_rx + self.num_minimal_cells_tx) /
                     float(self.num_minimal_cells_elapsed)
                 )
+
+                # rssi 
+                rssi_sum = 0
+                for mac_addr in self.mote.tsch.neighbor_table:
+                    last_two_chars = mac_addr[-2:]
+                    neighbor_id = int(last_two_chars, 16)
+
+                    minimal_cell = self.mote.tsch.get_cell(
+                        slot_offset      = 0,
+                        channel_offset   = 0,
+                        mac_addr         = None,
+                        slotframe_handle = 0
+                    )
+                    channel = self.mote.tsch._get_physical_channel(minimal_cell)
+                    rssi_sum +=  self.engine.connectivity.get_rssi(self.mote.id,neighbor_id,channel)
+                
                 self.log(
                     SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
                     {
@@ -252,6 +268,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                         u'num_minimal_cells_tx' : self.num_minimal_cells_tx,
                         u'minimal_cell_utilization' : minimal_cell_utilization,
                         u'neighbor_num' : len(self.mote.tsch.neighbor_table),
+                        u'neighbor_rssi_sum' : rssi_sum
                     }
                 )
                 self.minimal_cell_utilization = minimal_cell_utilization
@@ -260,7 +277,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
 
     def indication_rx_cell_elapsed(self, cell, received_packet):
         preferred_parent = self.mote.rpl.getPreferredParent()
-        if not preferred_parent:
+        if not self.mote.dagRoot and not preferred_parent:
             # nothing to do
             return
         
@@ -272,6 +289,8 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                 (cell.mac_addr == preferred_parent)
                 and
                 (cell.options == [d.CELLOPTION_RX])
+                and
+                not self.mote.dagRoot
             ):
             self._handle_rx_cell_elapsed_event(bool(received_packet))
         elif (
@@ -281,6 +300,8 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                     cell.slotframe.slotframe_handle ==
                     self.SLOTFRAME_HANDLE_AUTONOMOUS_CELLS
                 )
+                and
+                not self.mote.dagRoot
             ):
             if (
                 received_packet is None
@@ -574,7 +595,23 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             (self.num_minimal_cells_rx + self.num_minimal_cells_tx) /
             float(self.num_minimal_cells_elapsed)
         )
-        if d.MSF_MAX_NUMCELLS <= self.num_minimal_cells_elapsed:
+        if d.MSF_MAX_MINIMAL_NUMCELLS <= self.num_minimal_cells_elapsed:
+
+            # rssi 
+            rssi_sum = 0
+            for mac_addr in self.mote.tsch.neighbor_table:
+                last_two_chars = mac_addr[-2:]
+                neighbor_id = int(last_two_chars, 16)
+
+                minimal_cell = self.mote.tsch.get_cell(
+                    slot_offset      = 0,
+                    channel_offset   = 0,
+                    mac_addr         = None,
+                    slotframe_handle = 0
+                )
+                channel = self.mote.tsch._get_physical_channel(minimal_cell)
+                rssi_sum +=  self.engine.connectivity.get_rssi(self.mote.id,neighbor_id,channel)
+
             self.log(
                 SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
                 {
@@ -583,7 +620,8 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                     u'num_minimal_cells_tx' : self.num_minimal_cells_tx,
                     u'minimal_cell_utilization' : minimal_cell_utilization,
                     u'neighbor_num' : len(self.mote.tsch.neighbor_table),
-                }
+                    u'neighbor_rssi_sum' : rssi_sum
+                    }
             )
             self.minimal_cell_utilization = minimal_cell_utilization
             self._adapt_to_traffic_minimal_cell()

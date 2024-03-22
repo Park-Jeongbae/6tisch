@@ -21,6 +21,8 @@ import glob
 import numpy as np
 import json
 import csv
+import pandas as pd
+import math
 
 from SimEngine import SimLog
 import SimEngine.Mote.MoteDefines as d
@@ -73,7 +75,8 @@ def init_mote():
         'num_minimal_cells_rx' : {},
         'num_minimal_cells_tx' : {},
         'minimal_cell_utilization' : {},
-        'neighbor_num_per_minimal_cell' : {}
+        'neighbor_num_per_minimal_cell' : {},
+        'neighbor_rssi_sum' : {}
     }
 
 # =========================== KPIs ============================================
@@ -109,8 +112,8 @@ def kpis_all(inputfile):
                 ('_mote_id' in logline)
                 and
                 (mote_id not in allstats[run_id])
-                and
-                (mote_id != DAGROOT_ID)
+                # and
+                # (mote_id != DAGROOT_ID)
             ):
             allstats[run_id][mote_id] = init_mote()
 
@@ -402,9 +405,6 @@ def kpis_all(inputfile):
             mote_id = logline['_mote_id']
             neighbor_num = logline['neighbor_num']
 
-            if mote_id == DAGROOT_ID:
-                continue
-
             allstats[run_id][mote_id]['neighbor_num'] = neighbor_num
         
         # 장치별 RPL Rank 값을 저장함
@@ -423,14 +423,16 @@ def kpis_all(inputfile):
             num_minimal_cells_tx =  logline['num_minimal_cells_tx']
             minimal_cell_utilization = logline['minimal_cell_utilization']
             neighbor_num = logline['neighbor_num']
+            neighbor_rssi_sum = logline['neighbor_rssi_sum']
 
-            if mote_id == DAGROOT_ID or minimal_cell_utilization is None:
+            if minimal_cell_utilization is None:
                 continue
 
             allstats[run_id][mote_id]['num_minimal_cells_rx'][asn] = num_minimal_cells_rx
             allstats[run_id][mote_id]['num_minimal_cells_tx'][asn] = num_minimal_cells_tx
             allstats[run_id][mote_id]['minimal_cell_utilization'][asn] = minimal_cell_utilization
             allstats[run_id][mote_id]['neighbor_num_per_minimal_cell'][asn] = neighbor_num
+            allstats[run_id][mote_id]['neighbor_rssi_sum'][asn] = neighbor_rssi_sum
 
     # === compute advanced motestats
 
@@ -1109,6 +1111,7 @@ def kpis_all(inputfile):
     filled_data_tx = []
     filled_data_rx = []
     filled_data_neighbor = []
+    filled_data_neighbor_rssi_sum = []
 
     for (run_id, per_mote_stats) in allstats.items():
         for (mote_id, motestats) in per_mote_stats.items():
@@ -1118,12 +1121,14 @@ def kpis_all(inputfile):
                 filled_data_rx.append(motestats['num_minimal_cells_rx'])
             if 'neighbor_num_per_minimal_cell' in motestats:
                 filled_data_neighbor.append(motestats['neighbor_num_per_minimal_cell'])
+            if 'neighbor_rssi_sum' in motestats:
+                filled_data_neighbor_rssi_sum.append(motestats['neighbor_rssi_sum'])
 
     # x 값 설정
     x_values = range(0, 505001, 101)
 
     # 데이터프레임 생성 및 데이터 채우기
-    df = pd.DataFrame({'x': x_values})
+    df = pd.DataFrame({'tx': x_values})
 
     for i, data in enumerate(filled_data_tx, start=1):
         filled_data_i = fill_missing_values(data, x_values)
@@ -1138,7 +1143,7 @@ def kpis_all(inputfile):
     writer.save()
 
     # 데이터프레임 생성 및 데이터 채우기
-    df2 = pd.DataFrame({'x': x_values})
+    df2 = pd.DataFrame({'rx': x_values})
 
     for i, data in enumerate(filled_data_rx, start=1):
         filled_data_i = fill_missing_values(data, x_values)
@@ -1147,25 +1152,73 @@ def kpis_all(inputfile):
     # 합계 열 추가
     df2['Row Sum'] = df2.apply(calculate_row_sum, axis=1)
 
+    # 네트워크 참여 노드의 수 열 추가
+    network_node_num = [(row.iloc[1:-1] != 0).sum() for _, row in df2.iterrows()]
+    df2['network_node_num'] = network_node_num
+
     # 엑셀 파일로 저장
     writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
     df2.to_excel(writer, sheet_name='num_minimal_cells_rx', index=False)
     writer.save()
 
     # 데이터프레임 생성 및 데이터 채우기
-    df3 = pd.DataFrame({'x': x_values})
+    df3 = pd.DataFrame({'neighbor_num': x_values})
 
     for i, data in enumerate(filled_data_neighbor, start=1):
         filled_data_i = fill_missing_values(data, x_values)
         df3['Mote {}'.format(i)] = filled_data_i
 
-    # 평균 열 추가
-    df3['Row mean'] = df3.apply(calculate_row_mean, axis=1)
+    # 합계 열 추가
+    df3['Row Sum'] = df3.apply(calculate_row_sum, axis=1)
 
     # 엑셀 파일로 저장
     writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
     df3.to_excel(writer, sheet_name='neighbor_num_per_minimal_cell', index=False)
     writer.save()
+
+    # 데이터프레임 생성 및 데이터 채우기
+    df4 = pd.DataFrame({'neighbor_rssi_sum': x_values})
+
+    for i, data in enumerate(filled_data_neighbor_rssi_sum, start=1):
+        filled_data_i = fill_missing_values(data, x_values)
+        df4['Mote {}'.format(i)] = filled_data_i
+
+    # 합계 열 추가
+    df4['Row Sum'] = df4.apply(calculate_row_sum, axis=1)
+
+    # 엑셀 파일로 저장
+    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
+    df4.to_excel(writer, sheet_name='neighbor_rssi_sum', index=False)
+    writer.save()
+
+    # 종합
+    df5 = pd.DataFrame({'asn': x_values})
+    df5['tx_per_minimal_cell'] = df['Row Sum'] / d.MSF_MAX_MINIMAL_NUMCELLS    # 미니멀셀에서 평균적으로 수신되는 패킷의 수 (노드의 수)
+    df5['rx_per_minimal_cell'] = df2['Row Sum'] / d.MSF_MAX_MINIMAL_NUMCELLS   # 미니멀셀에서 평균적으로 송신되는 패킷의 수 (노드의 수)
+    df5['rx_per_tx'] =  df5['rx_per_minimal_cell'] / df5['tx_per_minimal_cell'] # 미니멀셀에서 평균적으로 송신당 수신되는 패킷의 수
+
+    df5['neighbor_sum'] = df3['Row Sum']    # 네트워크에 참여한 각 노드의 이웃의 수 합계
+    df5['network_node_num'] = df2['network_node_num']   # 네트워크에 참여중인 노드의 수
+    df5['neighbor_node_avg'] = df5['neighbor_sum'] / df5['network_node_num']    # 네트워크에 참여중인 노드당 평균 이웃의 수
+
+    df5['neighbor_rssi_sum'] = df4['Row Sum']   # 네트워크에 참여한 각 노드가 자신의 모든 이웃들의 RSSI 합계
+    df5['neighbor_rssi_avg'] = df5['neighbor_rssi_sum'] / df5['neighbor_sum']   # 이웃당 평균 RSSI
+
+    # neighbor_sum이 0인 경우를 처리하여 NaN이 아닌 값을 할당
+    df5.loc[df5['neighbor_sum'] == 0, 'neighbor_rssi_avg'] = 0
+    df5['neighbor_pdr'] = df5['neighbor_rssi_avg'].apply(_rssi_to_pdr)  # 평균 RSSI를 PDR로 변경
+
+    df5['tx_node_among_neighbors'] = df5['tx_per_minimal_cell'] * (df5['neighbor_node_avg'] / df5['network_node_num']) # 이웃들 중 송신하는 노드의 수
+    df5['rx_node_among_neighbors'] = df5['neighbor_node_avg'] - df5['tx_node_among_neighbors'] # 이웃들 중 수신하는 노드의 수
+    df5['expected_rx_node_num'] = df5['rx_node_among_neighbors'] * df5['neighbor_pdr'] # 링크를 고려한 수신 예상 노드의 수
+
+    df5['alpha']  = df5['expected_rx_node_num'] / df5['rx_per_tx'] # 혼잡도 
+
+    # 엑셀 파일로 저장
+    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
+    df5.to_excel(writer, sheet_name='total', index=False)
+    writer.save()
+
  #=========================================================================================================================
     # === remove unnecessary stats
 
@@ -1219,6 +1272,52 @@ def calculate_stats(data):
                 'std_dev': std,
                 'margin_of_error': margin_of_error}
 
+def _rssi_to_pdr(rssi):
+    """
+    rssi and pdr relationship obtained by experiment below
+    http://wsn.eecs.berkeley.edu/connectivity/?dataset=dust
+    """
+
+    rssi_pdr_table = {
+        -97:    0.0000,  # this value is not from experiment
+        -96:    0.1494,
+        -95:    0.2340,
+        -94:    0.4071,
+        # <-- 50% PDR is here, at RSSI=-93.6
+        -93:    0.6359,
+        -92:    0.6866,
+        -91:    0.7476,
+        -90:    0.8603,
+        -89:    0.8702,
+        -88:    0.9324,
+        -87:    0.9427,
+        -86:    0.9562,
+        -85:    0.9611,
+        -84:    0.9739,
+        -83:    0.9745,
+        -82:    0.9844,
+        -81:    0.9854,
+        -80:    0.9903,
+        -79:    1.0000,  # this value is not from experiment
+    }
+
+    minRssi = min(rssi_pdr_table.keys())
+    maxRssi = max(rssi_pdr_table.keys())
+
+    floorRssi = int(math.floor(rssi))
+    if  floorRssi < minRssi:
+        pdr = 0.0
+    elif floorRssi >= maxRssi:
+        pdr = 1.0
+    else:
+        pdrLow  = rssi_pdr_table[floorRssi]
+        pdrHigh = rssi_pdr_table[floorRssi+1]
+        # linear interpolation
+        pdr = (pdrHigh - pdrLow) * (rssi - float(floorRssi)) + pdrLow
+
+    assert 0 <= pdr <= 1.0
+
+    return pdr
 # =========================== main ============================================
 
 def main():
