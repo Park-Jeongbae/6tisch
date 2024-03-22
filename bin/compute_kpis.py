@@ -24,6 +24,7 @@ import csv
 import pandas as pd
 import math
 
+from datetime import datetime
 from SimEngine import SimLog
 import SimEngine.Mote.MoteDefines as d
 
@@ -1125,7 +1126,7 @@ def kpis_all(inputfile):
                 filled_data_neighbor_rssi_sum.append(motestats['neighbor_rssi_sum'])
 
     # x 값 설정
-    x_values = range(0, 505001, 101)
+    x_values = range(0, 505002, 101)
 
     # 데이터프레임 생성 및 데이터 채우기
     df = pd.DataFrame({'tx': x_values})
@@ -1134,11 +1135,20 @@ def kpis_all(inputfile):
         filled_data_i = fill_missing_values(data, x_values)
         df['Mote {}'.format(i)] = filled_data_i
 
+    # 모트의 개수 확인
+    num_motes = len(df.columns) - 1  # 'asn' 열을 제외하고 계산
+
+    # 현재 시간 가져오기
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # 파일 이름에 모트의 개수와 현재 시간 추가
+    file_name = "minimla_cell_congestion_{}motes_{}.xlsx".format(num_motes,current_time)
+
     # 합계 열 추가
     df['Row Sum'] = df.apply(calculate_row_sum, axis=1)
 
     # 엑셀 파일로 저장
-    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx')
+    writer = pd.ExcelWriter(file_name)
     df.to_excel(writer, sheet_name='num_minimal_cells_tx', index=False)
     writer.save()
 
@@ -1157,7 +1167,7 @@ def kpis_all(inputfile):
     df2['network_node_num'] = network_node_num
 
     # 엑셀 파일로 저장
-    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
+    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')
     df2.to_excel(writer, sheet_name='num_minimal_cells_rx', index=False)
     writer.save()
 
@@ -1172,7 +1182,7 @@ def kpis_all(inputfile):
     df3['Row Sum'] = df3.apply(calculate_row_sum, axis=1)
 
     # 엑셀 파일로 저장
-    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
+    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')
     df3.to_excel(writer, sheet_name='neighbor_num_per_minimal_cell', index=False)
     writer.save()
 
@@ -1187,7 +1197,7 @@ def kpis_all(inputfile):
     df4['Row Sum'] = df4.apply(calculate_row_sum, axis=1)
 
     # 엑셀 파일로 저장
-    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
+    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')
     df4.to_excel(writer, sheet_name='neighbor_rssi_sum', index=False)
     writer.save()
 
@@ -1214,10 +1224,23 @@ def kpis_all(inputfile):
 
     df5['alpha']  = df5['expected_rx_node_num'] / df5['rx_per_tx'] # 혼잡도 
 
-    # 엑셀 파일로 저장
-    writer = pd.ExcelWriter('minimla_cell_congestion.xlsx', engine='openpyxl', mode='a')
+    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')
     df5.to_excel(writer, sheet_name='total', index=False)
     writer.save()
+
+    # 각 열의 평균 계산
+    column_means = df5.mean()
+
+    # 열 이름과 평균 값을 리스트로 가져오기
+    metrics = column_means.index.tolist()
+    values = column_means.values.tolist()
+
+    # 열 이름과 평균 값을 가진 데이터프레임 생성
+    df_means = pd.DataFrame({'Metric': metrics, 'Value': values})
+
+    # 엑셀 파일에 새로운 시트로 평균값 추가
+    with pd.ExcelWriter(file_name, engine='openpyxl', mode='a') as writer:
+        df_means.to_excel(writer, sheet_name='Mean', index=False)
 
  #=========================================================================================================================
     # === remove unnecessary stats
