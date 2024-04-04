@@ -24,7 +24,7 @@ import csv
 import pandas as pd
 import math
 
-from datetime import datetime
+import datetime
 from SimEngine import SimLog
 import SimEngine.Mote.MoteDefines as d
 
@@ -74,10 +74,10 @@ def init_mote():
         'rpl_join' : False,
         'avg_hops' : None,
         'num_minimal_cells_rx' : {},
-        'num_minimal_cells_tx' : {},
         'minimal_cell_utilization' : {},
         'neighbor_num_per_minimal_cell' : {},
-        'neighbor_rssi_sum' : {}
+        'neighbor_rssi_sum' : {},
+        'network_nodes_num' : {}
     }
 
 # =========================== KPIs ============================================
@@ -419,21 +419,23 @@ def kpis_all(inputfile):
 
             allstats[run_id][mote_id]['rank'] = rank
         elif logline['_type'] == SimLog.LOG_USER_MINIMAL_CELL_CONGESTION['type']:
+ 
             mote_id = logline['_mote_id']
+            minimal_cell_asn = logline['minimal_cell_asn']
             num_minimal_cells_rx =  logline['num_minimal_cells_rx']
-            num_minimal_cells_tx =  logline['num_minimal_cells_tx']
             minimal_cell_utilization = logline['minimal_cell_utilization']
             neighbor_num = logline['neighbor_num']
             neighbor_rssi_sum = logline['neighbor_rssi_sum']
+            network_nodes_num = logline['network_nodes_num']
 
-            if minimal_cell_utilization is None:
-                continue
+            if mote_id not in allstats[run_id][mote_id]:
+                allstats[run_id][mote_id][mote_id] = {}
 
-            allstats[run_id][mote_id]['num_minimal_cells_rx'][asn] = num_minimal_cells_rx
-            allstats[run_id][mote_id]['num_minimal_cells_tx'][asn] = num_minimal_cells_tx
-            allstats[run_id][mote_id]['minimal_cell_utilization'][asn] = minimal_cell_utilization
-            allstats[run_id][mote_id]['neighbor_num_per_minimal_cell'][asn] = neighbor_num
-            allstats[run_id][mote_id]['neighbor_rssi_sum'][asn] = neighbor_rssi_sum
+            allstats[run_id][mote_id]['num_minimal_cells_rx'][minimal_cell_asn] = num_minimal_cells_rx
+            allstats[run_id][mote_id]['minimal_cell_utilization'][minimal_cell_asn] = minimal_cell_utilization
+            allstats[run_id][mote_id]['neighbor_num_per_minimal_cell'][minimal_cell_asn] = neighbor_num
+            allstats[run_id][mote_id]['neighbor_rssi_sum'][minimal_cell_asn] = neighbor_rssi_sum
+            allstats[run_id][mote_id]['network_nodes_num'][minimal_cell_asn] = network_nodes_num
 
     # === compute advanced motestats
 
@@ -1113,134 +1115,67 @@ def kpis_all(inputfile):
     filled_data_rx = []
     filled_data_neighbor = []
     filled_data_neighbor_rssi_sum = []
+    filled_data_network_nodes_num = []
+    filled_data_minimal_cell_utilization = []
 
     for (run_id, per_mote_stats) in allstats.items():
         for (mote_id, motestats) in per_mote_stats.items():
-            if 'num_minimal_cells_tx' in motestats:
-                filled_data_tx.append(motestats['num_minimal_cells_tx'])
             if 'num_minimal_cells_rx' in motestats:
                 filled_data_rx.append(motestats['num_minimal_cells_rx'])
             if 'neighbor_num_per_minimal_cell' in motestats:
                 filled_data_neighbor.append(motestats['neighbor_num_per_minimal_cell'])
             if 'neighbor_rssi_sum' in motestats:
                 filled_data_neighbor_rssi_sum.append(motestats['neighbor_rssi_sum'])
+            if 'network_nodes_num' in motestats:
+                filled_data_network_nodes_num.append(motestats['network_nodes_num'])
+            if 'minimal_cell_utilization' in motestats:
+                filled_data_minimal_cell_utilization.append(motestats['minimal_cell_utilization'])
 
-    # x 값 설정
-    x_values = range(0, 505002, 101)
+    # DataFrame 생성 및 행열 바꾸기
+    df_tx = pd.DataFrame(filled_data_tx).transpose()
+    df_rx = pd.DataFrame(filled_data_rx).transpose()
+    df_neighbor = pd.DataFrame(filled_data_neighbor).transpose()
+    df_neighbor_rssi_minimal = pd.DataFrame(filled_data_neighbor_rssi_sum).transpose()
+    df_network_nodes_num = pd.DataFrame(filled_data_network_nodes_num).transpose()
+    df_minimal_cell_utilization = pd.DataFrame(filled_data_minimal_cell_utilization).transpose()
 
-    # 데이터프레임 생성 및 데이터 채우기
-    df = pd.DataFrame({'tx': x_values})
+    # 빈 칸에는 자신이 속한 열의 바로 앞의 값을 채움
+    df_tx.fillna(method='ffill', axis=0, inplace=True)
+    df_rx.fillna(method='ffill', axis=0, inplace=True)
+    df_neighbor.fillna(method='ffill', axis=0, inplace=True)
+    df_neighbor_rssi_minimal.fillna(method='ffill', axis=0, inplace=True)
+    df_network_nodes_num.fillna(method='ffill', axis=0, inplace=True)
+    df_minimal_cell_utilization.fillna(method='ffill', axis=0, inplace=True)
 
-    for i, data in enumerate(filled_data_tx, start=1):
-        filled_data_i = fill_missing_values(data, x_values)
-        df['Mote {}'.format(i)] = filled_data_i
+    # Mote num
+    mote_num = len(filled_data_tx)
 
-    # 모트의 개수 확인
-    num_motes = len(df.columns) - 1  # 'asn' 열을 제외하고 계산
+    # 같은 X에 대한 합 계산하여 제일 오른쪽에 추가
+    df_rx['rx_sum'] = df_rx.sum(axis=1)
+    df_neighbor['neighbor_sum'] = df_neighbor.sum(axis=1)
+    df_neighbor_rssi_minimal['rssi_sum'] = df_neighbor_rssi_minimal.sum(axis=1)
+    df_minimal_cell_utilization['utilization_sum'] = df_minimal_cell_utilization.sum(axis=1)
 
-    # 현재 시간 가져오기
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # 파일 이름에 모트의 개수와 현재 시간 추가
-    file_name = "minimla_cell_congestion_{}motes_{}.xlsx".format(num_motes,current_time)
-
-    # 합계 열 추가
-    df['Row Sum'] = df.apply(calculate_row_sum, axis=1)
-
-    # 엑셀 파일로 저장
-    writer = pd.ExcelWriter(file_name)
-    df.to_excel(writer, sheet_name='num_minimal_cells_tx', index=False)
-    writer.save()
-
-    # 데이터프레임 생성 및 데이터 채우기
-    df2 = pd.DataFrame({'rx': x_values})
-
-    for i, data in enumerate(filled_data_rx, start=1):
-        filled_data_i = fill_missing_values(data, x_values)
-        df2['Mote {}'.format(i)] = filled_data_i
-
-    # 합계 열 추가
-    df2['Row Sum'] = df2.apply(calculate_row_sum, axis=1)
-
-    # 네트워크 참여 노드의 수 열 추가
-    network_node_num = [(row.iloc[1:-1] != 0).sum() for _, row in df2.iterrows()]
-    df2['network_node_num'] = network_node_num
+    # 현재 시간을 이용하여 파일 이름 생성
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_name = "mote_{}_{}.xlsx".format(mote_num, current_time)
 
     # 엑셀 파일로 저장
-    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')
-    df2.to_excel(writer, sheet_name='num_minimal_cells_rx', index=False)
-    writer.save()
+    with pd.ExcelWriter(file_name) as writer:
+        df_rx.to_excel(writer, sheet_name='rx_sum')
+        df_neighbor.to_excel(writer, sheet_name='neighbor_sum')
+        df_neighbor_rssi_minimal.to_excel(writer, sheet_name='rssi_sum_minimal')
+        df_network_nodes_num.to_excel(writer, sheet_name='network_nodes_num')
+        df_minimal_cell_utilization.to_excel(writer, sheet_name='utilization')
 
-    # 데이터프레임 생성 및 데이터 채우기
-    df3 = pd.DataFrame({'neighbor_num': x_values})
+        df_sum = pd.DataFrame()
+        df_sum['rx_sum'] = df_rx['rx_sum']
+        df_sum['utilization'] = df_minimal_cell_utilization['utilization_sum'] / df_network_nodes_num.max(axis=1)        
+        df_sum['neighbor_sum'] = df_neighbor['neighbor_sum']
+        df_sum['neighbor_avg'] = df_neighbor['neighbor_sum'] / df_network_nodes_num.max(axis=1)        
+        df_sum['rssi_avg'] =  df_neighbor_rssi_minimal['rssi_sum'] / df_neighbor['neighbor_sum']
 
-    for i, data in enumerate(filled_data_neighbor, start=1):
-        filled_data_i = fill_missing_values(data, x_values)
-        df3['Mote {}'.format(i)] = filled_data_i
-
-    # 합계 열 추가
-    df3['Row Sum'] = df3.apply(calculate_row_sum, axis=1)
-
-    # 엑셀 파일로 저장
-    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')
-    df3.to_excel(writer, sheet_name='neighbor_num_per_minimal_cell', index=False)
-    writer.save()
-
-    # 데이터프레임 생성 및 데이터 채우기
-    df4 = pd.DataFrame({'neighbor_rssi_sum': x_values})
-
-    for i, data in enumerate(filled_data_neighbor_rssi_sum, start=1):
-        filled_data_i = fill_missing_values(data, x_values)
-        df4['Mote {}'.format(i)] = filled_data_i
-
-    # 합계 열 추가
-    df4['Row Sum'] = df4.apply(calculate_row_sum, axis=1)
-
-    # 엑셀 파일로 저장
-    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')
-    df4.to_excel(writer, sheet_name='neighbor_rssi_sum', index=False)
-    writer.save()
-
-    # 종합
-    df5 = pd.DataFrame({'asn': x_values})
-    df5['tx_per_minimal_cell'] = df['Row Sum'] / d.MSF_MAX_MINIMAL_NUMCELLS    # 미니멀셀에서 평균적으로 수신되는 패킷의 수 (노드의 수)
-    df5['rx_per_minimal_cell'] = df2['Row Sum'] / d.MSF_MAX_MINIMAL_NUMCELLS   # 미니멀셀에서 평균적으로 송신되는 패킷의 수 (노드의 수)
-    df5['rx_per_tx'] =  df5['rx_per_minimal_cell'] / df5['tx_per_minimal_cell'] # 미니멀셀에서 평균적으로 송신당 수신되는 패킷의 수
-
-    df5['neighbor_sum'] = df3['Row Sum']    # 네트워크에 참여한 각 노드의 이웃의 수 합계
-    df5['network_node_num'] = df2['network_node_num']   # 네트워크에 참여중인 노드의 수
-    df5['neighbor_node_avg'] = df5['neighbor_sum'] / df5['network_node_num']    # 네트워크에 참여중인 노드당 평균 이웃의 수
-
-    df5['neighbor_rssi_sum'] = df4['Row Sum']   # 네트워크에 참여한 각 노드가 자신의 모든 이웃들의 RSSI 합계
-    df5['neighbor_rssi_avg'] = df5['neighbor_rssi_sum'] / df5['neighbor_sum']   # 이웃당 평균 RSSI
-
-    # neighbor_sum이 0인 경우를 처리하여 NaN이 아닌 값을 할당
-    df5.loc[df5['neighbor_sum'] == 0, 'neighbor_rssi_avg'] = 0
-    df5['neighbor_pdr'] = df5['neighbor_rssi_avg'].apply(_rssi_to_pdr)  # 평균 RSSI를 PDR로 변경
-
-    df5['tx_node_among_neighbors'] = df5['tx_per_minimal_cell'] * (df5['neighbor_node_avg'] / df5['network_node_num']) # 이웃들 중 송신하는 노드의 수
-    df5['rx_node_among_neighbors'] = df5['neighbor_node_avg'] - df5['tx_node_among_neighbors'] # 이웃들 중 수신하는 노드의 수
-    df5['expected_rx_node_num'] = df5['rx_node_among_neighbors'] * df5['neighbor_pdr'] # 링크를 고려한 수신 예상 노드의 수
-
-    df5['alpha']  = df5['expected_rx_node_num'] / df5['rx_per_tx'] # 혼잡도 
-
-    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')
-    df5.to_excel(writer, sheet_name='total', index=False)
-    writer.save()
-
-    # 각 열의 평균 계산
-    column_means = df5.mean()
-
-    # 열 이름과 평균 값을 리스트로 가져오기
-    metrics = column_means.index.tolist()
-    values = column_means.values.tolist()
-
-    # 열 이름과 평균 값을 가진 데이터프레임 생성
-    df_means = pd.DataFrame({'Metric': metrics, 'Value': values})
-
-    # 엑셀 파일에 새로운 시트로 평균값 추가
-    with pd.ExcelWriter(file_name, engine='openpyxl', mode='a') as writer:
-        df_means.to_excel(writer, sheet_name='Mean', index=False)
+        df_sum.to_excel(writer, sheet_name='summary')
 
  #=========================================================================================================================
     # === remove unnecessary stats
