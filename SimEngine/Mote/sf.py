@@ -18,10 +18,6 @@ import numpy as np
 
 # =========================== defines =========================================
 
-LEARNING_RATE = 0.1
-DISCOUNT_FACTOR = 0.9
-EXPLORATION_RATE = 0.4
-
 # =========================== helpers =========================================
 
 # =========================== body ============================================
@@ -166,6 +162,10 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
         self.minimal_cell_utilization  = [0 for _ in range(self.settings.user_minimlNumIdx)]
         self.minimal_cell_asn = 0
         self.q_table = np.zeros((self.settings.user_minimlNumIdx, self.settings.user_minimlNumChans))  # 각 인덱스에서 가능한 채널에 대한 Q-value를 저장
+        self.learning_rate = 0.1
+        self.discount_factor = 0.9
+        self.exploration_rate = 0.4
+
     # ======================= public ==========================================
 
     # === admin
@@ -276,7 +276,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                         # 활용도 측정
                         utilization = self.minimal_cell_utilization[index]
                         # Q-value 업데이트
-                        self.update_q_table(self.q_table, self.settings.user_minimlNumIdx, index, action, utilization)
+                        self.update_q_table(self.q_table, index, action, utilization)
 
             # 모든 노드가 동일한 주기로 루트에 정보를 전달하기 위해
             if self.engine.getAsn() != 0 and self.engine.getAsn() % (self.settings.tsch_slotframeLength * d.MSF_MAX_MINIMAL_NUMCELLS) == 0:
@@ -634,10 +634,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                     # 활용도 측정
                     utilization = self.minimal_cell_utilization[index]
                     # Q-value 업데이트
-                    self.update_q_table(self.q_table, self.settings.user_minimlNumIdx, index, action, utilization)
-                
-                # if self.mote.id == 1 or self.mote.id == 2 or self.mote.id == 3:
-                #     print(self.mote.id,self.mote.tsch.minimal_cell_channel_offset_sequence)
+                    self.update_q_table(self.q_table, index, action, utilization)
 
             self._reset_minimal_cell_counters()
 
@@ -1525,7 +1522,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
     
     # 액션 선택 함수
     def choose_action(self, q_table, index):
-        if random.uniform(0, 1) < EXPLORATION_RATE:
+        if random.uniform(0, 1) < self.exploration_rate:
             # 무작위로 행동 선택 (탐험)
             return random.choice(range(self.settings.user_minimlNumChans))
         else:
@@ -1533,7 +1530,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             return np.argmax(q_table[index])
         
     # Q-value 업데이트 함수
-    def update_q_table(self, q_table, seqLen, index, action, utilization):
+    def update_q_table(self, q_table, index, action, utilization):
         current_q_value = q_table[index][action]
-        new_q_value = (1 - LEARNING_RATE) * current_q_value + LEARNING_RATE * utilization
+        new_q_value = (1 - self.learning_rate) * current_q_value + self.learning_rate * utilization
         q_table[index][action] = new_q_value
