@@ -164,7 +164,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
         self.q_table = np.zeros((self.settings.user_minimlNumIdx, self.settings.user_minimlNumChans))  # 각 인덱스에서 가능한 채널에 대한 Q-value를 저장
         self.learning_rate = 0.1
         self.discount_factor = 0.9
-        self.exploration_rate = 0.4
+        self.exploration_rate = 0.1
 
     # ======================= public ==========================================
 
@@ -246,7 +246,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             # 미니멀셀도 elapsed 횟수를 카운트함
             self._update_minimal_cell_counters(self.TX_CELL_OPT, bool(sent_packet))
             # adapt number of cells if necessary
-            if d.MSF_MAX_MINIMAL_NUMCELLS <= self.num_minimal_cells_elapsed:
+            if d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx <= self.num_minimal_cells_elapsed:
                 
                 # 각 미니멀셀에 대해 활용률을 계산한다.
                 for i in range(len(self.minimal_cell_utilization)):
@@ -254,7 +254,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
 
                 self.minimal_cell_asn = self.engine.getAsn()
 
-                if self.engine.getAsn() != 0 and self.engine.getAsn() % d.MSF_MAX_MINIMAL_NUMCELLS == 0:
+                if self.engine.getAsn() != 0 and self.engine.getAsn() % (d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
                     self.log(
                         SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
                         {
@@ -603,7 +603,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
     def _handle_rx_minimal_cell_elapsed_event(self, used):
         self._update_minimal_cell_counters(self.RX_CELL_OPT, used)
         # adapt number of cells if necessary
-        if d.MSF_MAX_MINIMAL_NUMCELLS <= self.num_minimal_cells_elapsed:
+        if d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx <= self.num_minimal_cells_elapsed:
             
             # 각 미니멀셀에 대해 활용률을 계산한다.
             for i in range(len(self.minimal_cell_utilization)):
@@ -612,7 +612,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             # adapt number of cells if necessary
             self.minimal_cell_asn = self.engine.getAsn()
 
-            if self.engine.getAsn() != 0 and self.engine.getAsn() % d.MSF_MAX_MINIMAL_NUMCELLS == 0:
+            if self.engine.getAsn() != 0 and self.engine.getAsn() % (d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
                 self.log(
                     SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
                     {
@@ -639,7 +639,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             self._reset_minimal_cell_counters()
 
         # 모든 노드가 동일한 주기로 루트에 정보를 전달하기 위해
-        if self.engine.getAsn() != 0 and self.engine.getAsn() % (self.settings.tsch_slotframeLength * d.MSF_MAX_MINIMAL_NUMCELLS) == 0:
+        if self.engine.getAsn() != 0 and self.engine.getAsn() % (self.settings.tsch_slotframeLength * d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
             self._reset_minimal_cell_counters()
 
     def _update_cell_counters(self, cell_opt, used):
