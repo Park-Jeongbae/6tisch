@@ -67,6 +67,7 @@ class Tsch(object):
                 )
             )
         self.neighbor_table   = []
+        self.neighbor_rssi_table = {}
         self.pktToSend        = None
         self.waitingFor       = None
         self.active_cell      = None
@@ -94,6 +95,7 @@ class Tsch(object):
             length           = self.settings.tsch_slotframeLength
         )
 
+        self.minimal_cell_channel_offset_sequence = [0 for _ in range(1)]
     #======================== public ==========================================
 
     # getters/setters
@@ -1437,7 +1439,6 @@ class Tsch(object):
             target_asn = self.engine.getAsn() + d.TSCH_DESYNCHRONIZED_TIMEOUT_SLOTS
 
             def _desync():
-                print("_desync")
                 self.setIsSync(False)
 
             self.engine.scheduleAtAsn(
