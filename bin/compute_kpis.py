@@ -560,8 +560,11 @@ def kpis_all(inputfile):
                     count += 1
 
             # 평균을 계산합니다.
-            average = total_sum / count
-            minimal_cell_utilization.append(average)
+            if count == 0:
+                minimal_cell_utilization.append(0)
+            else:
+                average = total_sum / count
+                minimal_cell_utilization.append(average)
         #-- save stats
 
         allstats[run_id]['global-stats'] = {
@@ -1150,14 +1153,14 @@ def kpis_all(inputfile):
                         result[i][asn] = rx_num
 
                 for i in range(len(result)):
-                    filled_data_rx_list[i].append(result[i])
+                    filled_data_rx_list[i].append(dict(sorted(result[i].items())))
 
             if 'neighbor_num_per_minimal_cell' in motestats:
-                filled_data_neighbor.append(motestats['neighbor_num_per_minimal_cell'])
+                filled_data_neighbor.append(dict(sorted(motestats['neighbor_num_per_minimal_cell'].items())))
             if 'neighbor_rssi_sum' in motestats:
-                filled_data_neighbor_rssi_sum.append(motestats['neighbor_rssi_sum'])
+                filled_data_neighbor_rssi_sum.append(dict(sorted(motestats['neighbor_rssi_sum'].items())))
             if 'network_nodes_num' in motestats:
-                filled_data_network_nodes_num.append(motestats['network_nodes_num'])
+                filled_data_network_nodes_num.append(dict(sorted(motestats['network_nodes_num'].items())))
 
             if 'minimal_cell_utilization' in motestats:
                 result = {}
@@ -1168,11 +1171,9 @@ def kpis_all(inputfile):
                         result[sub_key][key] = sub_value
 
                 for i in range(len(result)):
-                    filled_data_minimal_cell_utilization[i].append(result[i])
-
+                    filled_data_minimal_cell_utilization[i].append(dict(sorted(result[i].items())))
 
         # DataFrame 생성 및 행열 바꾸기
-        df_tx = pd.DataFrame(filled_data_tx).transpose()
         df_rx_list = []
         for data in filled_data_rx_list:
             df_rx_list.append(pd.DataFrame(data).transpose())
@@ -1183,18 +1184,9 @@ def kpis_all(inputfile):
         for data in filled_data_minimal_cell_utilization:
             df_minimal_cell_utilization_list.append(pd.DataFrame(data).transpose())
 
-        # 빈 칸에는 자신이 속한 열의 바로 앞의 값을 채움
-        df_tx.fillna(method='ffill', axis=0, inplace=True)
-        for df_rx in df_rx_list:
-            df_rx.fillna(method='ffill', axis=0, inplace=True)
-        df_neighbor.fillna(method='ffill', axis=0, inplace=True)
-        df_neighbor_rssi_minimal.fillna(method='ffill', axis=0, inplace=True)
-        df_network_nodes_num.fillna(method='ffill', axis=0, inplace=True)
-        for df_minimal_cell_utilization in df_minimal_cell_utilization_list:
-            df_minimal_cell_utilization.fillna(method='ffill', axis=0, inplace=True)
-
         # 같은 X에 대한 합 계산하여 제일 오른쪽에 추가
-        df_rx['rx_sum'] = df_rx.sum(axis=1)
+        for df_rx in df_rx_list:
+            df_rx['rx_sum'] = df_rx.sum(axis=1)
         df_neighbor['neighbor_sum'] = df_neighbor.sum(axis=1)
         df_neighbor_rssi_minimal['rssi_sum'] = df_neighbor_rssi_minimal.sum(axis=1)
     
@@ -1208,7 +1200,6 @@ def kpis_all(inputfile):
 
         # 엑셀 파일로 저장
         with pd.ExcelWriter(file_name) as writer:
-            df_rx.to_excel(writer, sheet_name='rx_sum')
             for i, df_rx_ in enumerate(df_rx_list):
                 sheet_name = 'rx_{}'.format(i)  # 시트 이름에 숫자를 붙입니다.
                 df_rx_.to_excel(writer, sheet_name=sheet_name)
@@ -1380,9 +1371,8 @@ def main():
         flattened_data = flatten_dict(data)
 
         # CSV 파일로 저장
-        with open(output_file, 'wb') as csvfile:
+        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile)
-            # 헤더 쓰기
             writer.writerow(['Key', 'Value'])
             # 키-값 쓰기 (정렬된 순서로)
             for key, value in sorted(flattened_data.items()):

@@ -249,7 +249,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
 
                 self.minimal_cell_asn = self.engine.getAsn()
 
-                if self.engine.getAsn() != 0 and self.engine.getAsn() % d.MSF_MAX_MINIMAL_NUMCELLS == 0:
+                if self.engine.getAsn() != 0:
                     self.log(
                         SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
                         {
@@ -597,7 +597,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             # adapt number of cells if necessary
             self.minimal_cell_asn = self.engine.getAsn()
 
-            if self.engine.getAsn() != 0 and self.engine.getAsn() % d.MSF_MAX_MINIMAL_NUMCELLS == 0:
+            if self.engine.getAsn() != 0:
                 self.log(
                     SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
                     {
