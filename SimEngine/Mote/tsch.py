@@ -1128,9 +1128,14 @@ class Tsch(object):
             # 미니멀 셀일 경우
             if self.engine.getAsn() % self.settings.tsch_slotframeLength == 0:
 
-                numChans = self.settings.user_minimlNumChans
-                idx = (self.engine.getAsn() // self.settings.tsch_slotframeLength) % numChans
+                numIdx = self.settings.user_minimlNumIdx
+                idx = (self.engine.getAsn() // self.settings.tsch_slotframeLength) % numIdx
                 channel_offset = self.minimal_cell_channel_offset_sequence[idx]
+                
+                # 특정 인덱스에서는 자신의 ID 기반의 채널 오프셋만을 사용한다.
+                if idx == (self.mote.id % numIdx):
+                    channel_offset = self.mote.id % self.settings.user_minimlNumChans
+
                 return self.hopping_sequence[
                     (self.engine.getAsn() + int(channel_offset)) %
                     len(self.hopping_sequence)

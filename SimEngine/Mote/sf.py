@@ -254,7 +254,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
 
                 self.minimal_cell_asn = self.engine.getAsn()
 
-                if self.engine.getAsn() != 0 and self.engine.getAsn() % (d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
+                if self.engine.getAsn() != 0:
                     self.log(
                         SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
                         {
@@ -279,7 +279,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                         self.update_q_table(self.q_table, index, action, utilization)
 
             # 모든 노드가 동일한 주기로 루트에 정보를 전달하기 위해
-            if self.engine.getAsn() != 0 and self.engine.getAsn() % (self.settings.tsch_slotframeLength * d.MSF_MAX_MINIMAL_NUMCELLS) == 0:
+            if self.engine.getAsn() != 0 and self.engine.getAsn() % (self.settings.tsch_slotframeLength * d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
                 self._reset_minimal_cell_counters()
 
     def indication_rx_cell_elapsed(self, cell, received_packet):
@@ -612,7 +612,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             # adapt number of cells if necessary
             self.minimal_cell_asn = self.engine.getAsn()
 
-            if self.engine.getAsn() != 0 and self.engine.getAsn() % (d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
+            if self.engine.getAsn() != 0:
                 self.log(
                     SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
                     {
