@@ -1427,7 +1427,7 @@ class Tsch(object):
 
         # schedule sending a EB
         self.engine.scheduleAtAsn(
-            asn              = asnNow + self.setting.tsch_ebPeriod // self.settings.tsch_slotDuration,
+            asn              = asnNow + self.settings.tsch_ebPeriod // self.settings.tsch_slotDuration,
             cb               = self._sendEB,
             uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
             intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
