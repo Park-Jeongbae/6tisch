@@ -159,12 +159,13 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
         # user
         self.num_minimal_cells_elapsed = 0
         self.num_minimal_cells_rx = [0 for _ in range(self.settings.user_minimlNumIdx)]
+        self.num_minimal_cells_tx = [0 for _ in range(self.settings.user_minimlNumIdx)]
         self.minimal_cell_utilization  = [0 for _ in range(self.settings.user_minimlNumIdx)]
         self.minimal_cell_asn = 0
         self.q_table = np.zeros((self.settings.user_minimlNumIdx, self.settings.user_minimlNumChans))  # 각 인덱스에서 가능한 채널에 대한 Q-value를 저장
-        self.learning_rate = 0.1
-        self.discount_factor = 0.9
-        self.exploration_rate = 0.1
+        self.learning_rate = d.INIT_LEARNING_RATE
+        self.discount_factor = d.INIT_DISCOUNT_FACTOR
+        self.exploration_rate = d.INIT_EXPLORATION_RATE
 
     # ======================= public ==========================================
 
@@ -243,44 +244,14 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
                 self._adapt_to_traffic(preferred_parent, self.TX_CELL_OPT)
                 self._reset_cell_counters(self.TX_CELL_OPT)
         elif cell.slot_offset == 0 and cell.channel_offset == 0 and self.mote.tsch.getIsSync():
+
+            used = False
+            if sent_packet is not None and sent_packet[u'type'] == d.PKT_TYPE_EB:
+                used = True
+
             # 미니멀셀도 elapsed 횟수를 카운트함
-            self._update_minimal_cell_counters(self.TX_CELL_OPT, bool(sent_packet))
-            # adapt number of cells if necessary
-            if d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx <= self.num_minimal_cells_elapsed:
-                
-                # 각 미니멀셀에 대해 활용률을 계산한다.
-                for i in range(len(self.minimal_cell_utilization)):
-                    self.minimal_cell_utilization[i] = self.num_minimal_cells_rx[i] / (float(self.num_minimal_cells_elapsed) / self.settings.user_minimlNumIdx)
-
-                self.minimal_cell_asn = self.engine.getAsn()
-
-                if self.engine.getAsn() != 0:
-                    self.log(
-                        SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
-                        {
-                            u'_mote_id' : self.mote.id,
-                            u'minimal_cell_asn' : self.minimal_cell_asn,
-                            u'num_minimal_cells_rx' : self.num_minimal_cells_rx,
-                            u'minimal_cell_utilization' :  self.minimal_cell_utilization,
-                            u'neighbor_num' : len(self.mote.tsch.neighbor_rssi_table),
-                            u'neighbor_rssi_sum' : sum(self.mote.tsch.neighbor_rssi_table.values()),
-                            u'network_nodes_num' : len(self.mote.rpl.parentChildfromDAOs) + 1
-                        }
-                    )
-
-                    for index in range(self.settings.user_minimlNumIdx):
-                        # 현재 인덱스에서 무작위로 행동 선택 또는 Q-value가 가장 높은 행동 선택
-                        action = self.choose_action(self.q_table,index)
-                        # 시퀀스 업데이트
-                        self.mote.tsch.minimal_cell_channel_offset_sequence[index] = action
-                        # 활용도 측정
-                        utilization = self.minimal_cell_utilization[index]
-                        # Q-value 업데이트
-                        self.update_q_table(self.q_table, index, action, utilization)
-
-            # 모든 노드가 동일한 주기로 루트에 정보를 전달하기 위해
-            if self.engine.getAsn() != 0 and self.engine.getAsn() % (self.settings.tsch_slotframeLength * d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
-                self._reset_minimal_cell_counters()
+            self._update_minimal_cell_counters(self.TX_CELL_OPT, used)
+            self._calculate_minimal_cell_collision()
 
     def indication_rx_cell_elapsed(self, cell, received_packet):
         preferred_parent = self.mote.rpl.getPreferredParent()
@@ -573,6 +544,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
     def _reset_minimal_cell_counters(self):
         self.num_minimal_cells_elapsed = 0
         self.num_minimal_cells_rx = [0 for _ in range(self.settings.user_minimlNumIdx)]
+        self.num_minimal_cells_tx = [0 for _ in range(self.settings.user_minimlNumIdx)]
         self.minimal_cell_utilization  = [0 for _ in range(self.settings.user_minimlNumIdx)]
 
     def _handle_rx_cell_elapsed_event(self, used_by_parent):
@@ -602,45 +574,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
 
     def _handle_rx_minimal_cell_elapsed_event(self, used):
         self._update_minimal_cell_counters(self.RX_CELL_OPT, used)
-        # adapt number of cells if necessary
-        if d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx <= self.num_minimal_cells_elapsed:
-            
-            # 각 미니멀셀에 대해 활용률을 계산한다.
-            for i in range(len(self.minimal_cell_utilization)):
-                self.minimal_cell_utilization[i] = self.num_minimal_cells_rx[i] / (float(self.num_minimal_cells_elapsed) / self.settings.user_minimlNumIdx)
-
-            # adapt number of cells if necessary
-            self.minimal_cell_asn = self.engine.getAsn()
-
-            if self.engine.getAsn() != 0:
-                self.log(
-                    SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
-                    {
-                        u'_mote_id' : self.mote.id,
-                        u'minimal_cell_asn' : self.minimal_cell_asn,
-                        u'num_minimal_cells_rx' : self.num_minimal_cells_rx,
-                        u'minimal_cell_utilization' :  self.minimal_cell_utilization,
-                        u'neighbor_num' : len(self.mote.tsch.neighbor_rssi_table),
-                        u'neighbor_rssi_sum' : sum(self.mote.tsch.neighbor_rssi_table.values()),
-                        u'network_nodes_num' : len(self.mote.rpl.parentChildfromDAOs) + 1
-                    }
-                )
-
-                for index in range(self.settings.user_minimlNumIdx):
-                    # 현재 인덱스에서 무작위로 행동 선택 또는 Q-value가 가장 높은 행동 선택
-                    action = self.choose_action(self.q_table,index)
-                    # 시퀀스 업데이트
-                    self.mote.tsch.minimal_cell_channel_offset_sequence[index] = action
-                    # 활용도 측정
-                    utilization = self.minimal_cell_utilization[index]
-                    # Q-value 업데이트
-                    self.update_q_table(self.q_table, index, action, utilization)
-
-            self._reset_minimal_cell_counters()
-
-        # 모든 노드가 동일한 주기로 루트에 정보를 전달하기 위해
-        if self.engine.getAsn() != 0 and self.engine.getAsn() % (self.settings.tsch_slotframeLength * d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
-            self._reset_minimal_cell_counters()
+        self._calculate_minimal_cell_collision()
 
     def _update_cell_counters(self, cell_opt, used):
         if cell_opt == self.TX_CELL_OPT:
@@ -660,6 +594,51 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
         if used:
             if cell_opt == self.RX_CELL_OPT:
                 self.num_minimal_cells_rx[idx] += 1
+            else:
+                self.num_minimal_cells_tx[idx] += 1
+
+    def _calculate_minimal_cell_collision(self):
+        # adapt number of cells if necessary
+        if d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx <= self.num_minimal_cells_elapsed:
+            
+            # 각 미니멀셀에 대해 활용률을 계산한다.
+            for i in range(len(self.minimal_cell_utilization)):
+                self.minimal_cell_utilization[i] = self.num_minimal_cells_rx[i] / (float(self.num_minimal_cells_elapsed) / self.settings.user_minimlNumIdx)
+
+            # adapt number of cells if necessary
+            self.minimal_cell_asn = self.engine.getAsn()
+
+            if self.engine.getAsn() != 0:
+                self.log(
+                    SimEngine.SimLog.LOG_USER_MINIMAL_CELL_CONGESTION,
+                    {
+                        u'_mote_id' : self.mote.id,
+                        u'minimal_cell_asn' : self.minimal_cell_asn,
+                        u'num_minimal_cells_rx' : self.num_minimal_cells_rx,
+                        u'num_minimal_cells_tx' : self.num_minimal_cells_tx,
+                        u'minimal_cell_utilization' :  self.minimal_cell_utilization,
+                        u'neighbor_num' : len(self.mote.tsch.neighbor_rssi_table),
+                        u'neighbor_rssi_sum' : sum(self.mote.tsch.neighbor_rssi_table.values()),
+                        u'network_nodes_num' : len(self.mote.rpl.parentChildfromDAOs) + 1
+                    }
+                )
+
+                for index in range(self.settings.user_minimlNumIdx):  
+                    if index != self.mote.id % self.settings.user_minimlNumIdx:
+                        # 현재 인덱스에서 무작위로 행동 선택 또는 Q-value가 가장 높은 행동 선택
+                        action = self.choose_action(self.q_table,index)
+                        # 시퀀스 업데이트
+                        self.mote.tsch.minimal_cell_channel_offset_sequence[index] = action
+                        # 활용도 측정
+                        utilization = self.minimal_cell_utilization[index]
+                        # Q-value 업데이트
+                        self.update_q_table(self.q_table, index, action, utilization)
+
+            self._reset_minimal_cell_counters()
+
+        # 모든 노드가 동일한 주기로 루트에 정보를 전달하기 위해
+        if self.engine.getAsn() != 0 and self.engine.getAsn() % (self.settings.tsch_slotframeLength * d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx) == 0:
+            self._reset_minimal_cell_counters()
 
     def _adapt_to_traffic(self, neighbor, cell_opt):
         # reset retry counter
@@ -1522,6 +1501,9 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
     
     # 액션 선택 함수
     def choose_action(self, q_table, index):
+        if self.settings.epsilon_deca:
+            self.exploration_rate *= d.DECAY_RATE
+
         if random.uniform(0, 1) < self.exploration_rate:
             # 무작위로 행동 선택 (탐험)
             return random.choice(range(self.settings.user_minimlNumChans))

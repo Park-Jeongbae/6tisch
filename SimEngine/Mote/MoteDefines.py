@@ -80,7 +80,7 @@ SIXP_CALLBACK_EVENT_ABORTED                 = u'aborted'
 
 # === sf
 MSF_MAX_NUMCELLS                            = 100
-MSF_MAX_MINIMAL_NUMCELLS                    = 100
+MSF_MAX_MINIMAL_NUMCELLS                    = 10
 MSF_LIM_NUMCELLSUSED_HIGH                   = 0.75 # in [0-1]
 MSF_LIM_NUMCELLSUSED_LOW                    = 0.25 # in [0-1]
 MSF_HOUSEKEEPINGCOLLISION_PERIOD            = 60   # in seconds
@@ -111,6 +111,11 @@ RADIO_STATE_TX                              = u'tx'
 RADIO_STATE_RX                              = u'rx'
 RADIO_STATE_OFF                             = u'off'
 
+# === q-learning
+INIT_LEARNING_RATE                          = 0.5
+INIT_DISCOUNT_FACTOR                        = 0.5
+INIT_EXPLORATION_RATE                       = 0.5
+DECAY_RATE                                  = 0.99
 # === battery
 # Idle: Time slot during which a node listens for data, but receives
 # none

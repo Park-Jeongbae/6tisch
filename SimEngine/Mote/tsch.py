@@ -96,6 +96,7 @@ class Tsch(object):
         )
 
         self.minimal_cell_channel_offset_sequence = [0 for _ in range(self.settings.user_minimlNumIdx)]
+        self.minimal_cell_channel_offset_sequence[self.mote.id % self.settings.user_minimlNumIdx] =  self.mote.id % self.settings.user_minimlNumChans
     #======================== public ==========================================
 
     # getters/setters
@@ -1426,7 +1427,7 @@ class Tsch(object):
 
         # schedule sending a EB
         self.engine.scheduleAtAsn(
-            asn              = asnNow + self.settings.tsch_slotframeLength,
+            asn              = asnNow + self.setting.tsch_ebPeriod // self.settings.tsch_slotDuration,
             cb               = self._sendEB,
             uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
             intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
@@ -1434,11 +1435,9 @@ class Tsch(object):
 
     def _sendEB(self):
 
-        packet_to_send = None
-        if self._decided_to_send_eb():
-            packet_to_send = self._create_EB()
-            if packet_to_send is not None:
-                self.enqueue(packet_to_send,True)
+        packet_to_send = self._create_EB()
+        if packet_to_send is not None:
+            self.enqueue(packet_to_send,True)
 
         # schedule next EB
         self._start_sendEB_timer()
