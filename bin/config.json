@@ -2,14 +2,14 @@
     "version":                                             0,
     "execution": {
         "numCPUs":                                         1,
-        "numRuns":                                         2
+        "numRuns":                                         1
     },
     "settings": {
         "combination": {
             "exec_numMotes":                               [10]
         },
         "regular": {
-            "exec_numSlotframesPerRun":                    1000,
+            "exec_numSlotframesPerRun":                    10000,
             "exec_minutesPerRun":                          null,
             "exec_randomSeed":                             "random",
 
@@ -60,10 +60,10 @@
 
             "motes_eui64":                                 [],
             
-            "user_minimlNumChans":                          2,
-            "user_minimlNumIdx":                            2,
-            "epsilon_deca":                                 true,
-            "user_neighbors_num_channel_selection":         true    
+            "user_minimlNumChans":                          4,
+            "user_minimlNumIdx":                            4,  
+            "user_epsilon_deca":                            true,
+            "user_period_eb":                               true
         }
     },
     "logging":                                             "all",

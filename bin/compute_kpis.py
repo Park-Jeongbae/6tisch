@@ -78,7 +78,8 @@ def init_mote():
         'minimal_cell_utilization' : {},
         'neighbor_num_per_minimal_cell' : {},
         'neighbor_rssi_sum' : {},
-        'network_nodes_num' : {}
+        'network_nodes_num' : {},
+        'minimal_cell_chan_seq' : {},
     }
 
 # =========================== KPIs ============================================
@@ -429,28 +430,23 @@ def kpis_all(inputfile):
             neighbor_num = logline['neighbor_num']
             neighbor_rssi_sum = logline['neighbor_rssi_sum']
             network_nodes_num = logline['network_nodes_num']
+            minimal_cell_chan_seq = logline['minimal_cell_chan_seq']
 
-            if mote_id not in allstats[run_id][mote_id]:
-                allstats[run_id][mote_id][mote_id] = {}
             allstats[run_id][mote_id]['num_minimal_cells_rx'][minimal_cell_asn] = num_minimal_cells_rx
             allstats[run_id][mote_id]['num_minimal_cells_tx'][minimal_cell_asn] = num_minimal_cells_tx
 
             for i in range(len(minimal_cell_utilization)):
-                # 경로가 존재하지 않으면 추가
                 if not allstats[run_id][mote_id].get('minimal_cell_utilization'):
                     allstats[run_id][mote_id]['minimal_cell_utilization'] = {}
                 if not allstats[run_id][mote_id]['minimal_cell_utilization'].get(minimal_cell_asn):
                     allstats[run_id][mote_id]['minimal_cell_utilization'][minimal_cell_asn] = {}
 
-                # 데이터 추가
                 allstats[run_id][mote_id]['minimal_cell_utilization'][minimal_cell_asn][i] = minimal_cell_utilization[i]
 
-            # 위의 경로 추가는 딕셔너리의 비어있음 여부 확인을 포함합니다.
             allstats[run_id][mote_id]['neighbor_num_per_minimal_cell'][minimal_cell_asn] = neighbor_num
             allstats[run_id][mote_id]['neighbor_rssi_sum'][minimal_cell_asn] = neighbor_rssi_sum
             allstats[run_id][mote_id]['network_nodes_num'][minimal_cell_asn] = network_nodes_num
-
-
+            allstats[run_id][mote_id]['minimal_cell_chan_seq'][minimal_cell_asn] = minimal_cell_chan_seq
     # === compute advanced motestats
 
     for (run_id, per_mote_stats) in list(allstats.items()):
@@ -1203,9 +1199,12 @@ def kpis_all(inputfile):
     avgStates['minimal-cell-utilization']  = calculate_stats(minimal_cell_utilization_data)
 
  #=========================================================================================================================
-    # 모든 데이터 수집
+   
+    # 시간에 따른 미니멀셀 혼잡 관련 파라미터 통계
     filled_data_rx_list = [[] for _ in range(file_settings['user_minimlNumIdx'])]
     filled_data_tx_list = [[] for _ in range(file_settings['user_minimlNumIdx'])]
+    filled_data_chan_seq_list = [[] for _ in range(file_settings['user_minimlNumIdx'])]
+
     filled_data_neighbor = []
     filled_data_neighbor_rssi_sum = []
     filled_data_network_nodes_num = []
@@ -1224,16 +1223,15 @@ def kpis_all(inputfile):
                 for i in range(len(result)):
                     filled_data_rx_list[i].append(dict(sorted(result[i].items())))
                     
-            if 'num_minimal_cells_tx' in motestats:
+            if 'minimal_cell_chan_seq' in motestats:
                 result = {}
-                for asn, value in motestats['num_minimal_cells_tx'].items():
-                    for i, tx_num in enumerate(value):
+                for asn, value in motestats['minimal_cell_chan_seq'].items():
+                    for i, chan in enumerate(value):
                         if i not in result:
                             result[i] = {}
-                        result[i][asn] = tx_num
-
+                        result[i][asn] = chan
                 for i in range(len(result)):
-                    filled_data_tx_list[i].append(dict(sorted(result[i].items())))
+                    filled_data_chan_seq_list[i].append(dict(sorted(result[i].items())))
 
             if 'neighbor_num_per_minimal_cell' in motestats:
                 filled_data_neighbor.append(dict(sorted(motestats['neighbor_num_per_minimal_cell'].items())))
@@ -1253,6 +1251,17 @@ def kpis_all(inputfile):
                 for i in range(len(result)):
                     filled_data_minimal_cell_utilization[i].append(dict(sorted(result[i].items())))
 
+            if 'num_minimal_cells_tx' in motestats:
+                result = {}
+                for asn, value in motestats['num_minimal_cells_tx'].items():
+                    for i, tx_num in enumerate(value):
+                        if i not in result:
+                            result[i] = {}
+                        result[i][asn] = tx_num
+
+                for i in range(len(result)):
+                    filled_data_tx_list[i].append(dict(sorted(result[i].items())))
+
         # DataFrame 생성 및 행열 바꾸기
         df_rx_list = []
         for data in filled_data_rx_list:
@@ -1266,7 +1275,9 @@ def kpis_all(inputfile):
         df_minimal_cell_utilization_list = []
         for data in filled_data_minimal_cell_utilization:
             df_minimal_cell_utilization_list.append(pd.DataFrame(data).transpose())
-
+        df_chan_seq_list = []
+        for data in filled_data_chan_seq_list:
+            df_chan_seq_list.append(pd.DataFrame(data).transpose())
         # 같은 X에 대한 합 계산하여 제일 오른쪽에 추가
         for df_rx in df_rx_list:
             df_rx['rx_sum'] = df_rx.sum(axis=1)
@@ -1297,6 +1308,9 @@ def kpis_all(inputfile):
             for i, df_minimal_cell_utilization in enumerate(df_minimal_cell_utilization_list):
                 sheet_name = 'utilization_{}'.format(i)  # 시트 이름에 숫자를 붙입니다.
                 df_minimal_cell_utilization.to_excel(writer, sheet_name=sheet_name)
+            for i, df_chan_seq_ in enumerate(df_chan_seq_list):
+                sheet_name = 'chan_seq_{}'.format(i)  # 시트 이름에 숫자를 붙입니다.
+                df_chan_seq_.to_excel(writer, sheet_name=sheet_name)
 
             df_sum = pd.DataFrame()
             for df_rx in df_rx_list:

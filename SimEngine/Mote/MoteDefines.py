@@ -114,7 +114,7 @@ RADIO_STATE_OFF                             = u'off'
 # === q-learning
 INIT_LEARNING_RATE                          = 0.5
 INIT_DISCOUNT_FACTOR                        = 0.5
-INIT_EXPLORATION_RATE                       = 0.5
+INIT_EXPLORATION_RATE                       = 1
 DECAY_RATE                                  = 0.99
 # === battery
 # Idle: Time slot during which a node listens for data, but receives

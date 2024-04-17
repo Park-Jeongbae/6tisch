@@ -96,7 +96,6 @@ class Tsch(object):
         )
 
         self.minimal_cell_channel_offset_sequence = [0 for _ in range(self.settings.user_minimlNumIdx)]
-        self.minimal_cell_channel_offset_sequence[self.mote.id % self.settings.user_minimlNumIdx] =  self.mote.id % self.settings.user_minimlNumChans
     #======================== public ==========================================
 
     # getters/setters
@@ -1130,12 +1129,8 @@ class Tsch(object):
             if self.engine.getAsn() % self.settings.tsch_slotframeLength == 0:
 
                 numIdx = self.settings.user_minimlNumIdx
-                idx = (self.engine.getAsn() // self.settings.tsch_slotframeLength) % numIdx
+                idx = ((self.engine.getAsn() // self.settings.tsch_slotframeLength) // d.MSF_MAX_MINIMAL_NUMCELLS) % (numIdx)
                 channel_offset = self.minimal_cell_channel_offset_sequence[idx]
-                
-                # 특정 인덱스에서는 자신의 ID 기반의 채널 오프셋만을 사용한다.
-                if idx == (self.mote.id % numIdx):
-                    channel_offset = self.mote.id % self.settings.user_minimlNumChans
 
                 return self.hopping_sequence[
                     (self.engine.getAsn() + int(channel_offset)) %
@@ -1151,7 +1146,10 @@ class Tsch(object):
 
     def _decided_to_send_eb(self):
         # short-hand
-        prob = float(self.settings.tsch_probBcast_ebProb)
+        if self.settings.user_period_eb:
+            prob = 1
+        else:
+            prob = float(self.settings.tsch_probBcast_ebProb)
 
         # following the Bayesian broadcasting algorithm
         return (
@@ -1425,19 +1423,30 @@ class Tsch(object):
     def _start_sendEB_timer(self):
         asnNow = self.engine.getAsn()
 
-        # schedule sending a EB
-        self.engine.scheduleAtAsn(
-            asn              = asnNow + self.settings.tsch_ebPeriod // self.settings.tsch_slotDuration,
-            cb               = self._sendEB,
-            uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
-            intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
-        )
+        if self.settings.user_period_eb:
+            # schedule sending a EB
+            self.engine.scheduleAtAsn(
+                asn              = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod,
+                cb               = self._sendEB,
+                uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
+                intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
+            )
+        else:
+            # schedule sending a EB
+            self.engine.scheduleAtAsn(
+                asn              = asnNow + self.settings.tsch_slotframeLength,
+                cb               = self._sendEB,
+                uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
+                intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
+            )
 
     def _sendEB(self):
 
-        packet_to_send = self._create_EB()
-        if packet_to_send is not None:
-            self.enqueue(packet_to_send,True)
+        packet_to_send = None
+        if self._decided_to_send_eb():
+            packet_to_send = self._create_EB()
+            if packet_to_send is not None:
+                self.enqueue(packet_to_send,True)
 
         # schedule next EB
         self._start_sendEB_timer()
