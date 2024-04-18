@@ -1182,7 +1182,10 @@ class Tsch(object):
 
     def _decided_to_send_eb(self):
         # short-hand
-        prob = float(self.settings.tsch_probBcast_ebProb)
+        if self.settings.user_period_eb:
+            prob = 1
+        else:
+            prob = float(self.settings.tsch_probBcast_ebProb)
 
         # following the Bayesian broadcasting algorithm
         return (
@@ -1456,13 +1459,22 @@ class Tsch(object):
     def _start_sendEB_timer(self):
         asnNow = self.engine.getAsn()
 
-        # schedule sending a EB
-        self.engine.scheduleAtAsn(
-            asn              = asnNow + self.settings.tsch_slotframeLength,
-            cb               = self._sendEB,
-            uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
-            intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
-        )
+        if self.settings.user_period_eb:
+            # schedule sending a EB
+            self.engine.scheduleAtAsn(
+                asn              = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod,
+                cb               = self._sendEB,
+                uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
+                intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
+            )
+        else:
+            # schedule sending a EB
+            self.engine.scheduleAtAsn(
+                asn              = asnNow + self.settings.tsch_slotframeLength,
+                cb               = self._sendEB,
+                uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
+                intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
+            )
 
     def _sendEB(self):
 

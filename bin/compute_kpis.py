@@ -74,10 +74,12 @@ def init_mote():
         'rpl_join' : False,
         'avg_hops' : None,
         'num_minimal_cells_rx' : {},
+        'num_minimal_cells_tx' : {},
         'minimal_cell_utilization' : {},
         'neighbor_num_per_minimal_cell' : {},
         'neighbor_rssi_sum' : {},
-        'network_nodes_num' : {}
+        'network_nodes_num' : {},
+        'minimal_cell_chan_seq' : {},
     }
 
 # =========================== KPIs ============================================
@@ -423,31 +425,28 @@ def kpis_all(inputfile):
             mote_id = logline['_mote_id']
             minimal_cell_asn = logline['minimal_cell_asn']
             num_minimal_cells_rx =  logline['num_minimal_cells_rx']
+            num_minimal_cells_tx =  logline['num_minimal_cells_tx']
             minimal_cell_utilization = logline['minimal_cell_utilization']
             neighbor_num = logline['neighbor_num']
             neighbor_rssi_sum = logline['neighbor_rssi_sum']
             network_nodes_num = logline['network_nodes_num']
+            minimal_cell_chan_seq = logline['minimal_cell_chan_seq']
 
-            if mote_id not in allstats[run_id][mote_id]:
-                allstats[run_id][mote_id][mote_id] = {}
             allstats[run_id][mote_id]['num_minimal_cells_rx'][minimal_cell_asn] = num_minimal_cells_rx
+            allstats[run_id][mote_id]['num_minimal_cells_tx'][minimal_cell_asn] = num_minimal_cells_tx
 
             for i in range(len(minimal_cell_utilization)):
-                # 경로가 존재하지 않으면 추가
                 if not allstats[run_id][mote_id].get('minimal_cell_utilization'):
                     allstats[run_id][mote_id]['minimal_cell_utilization'] = {}
                 if not allstats[run_id][mote_id]['minimal_cell_utilization'].get(minimal_cell_asn):
                     allstats[run_id][mote_id]['minimal_cell_utilization'][minimal_cell_asn] = {}
 
-                # 데이터 추가
                 allstats[run_id][mote_id]['minimal_cell_utilization'][minimal_cell_asn][i] = minimal_cell_utilization[i]
 
-            # 위의 경로 추가는 딕셔너리의 비어있음 여부 확인을 포함합니다.
             allstats[run_id][mote_id]['neighbor_num_per_minimal_cell'][minimal_cell_asn] = neighbor_num
             allstats[run_id][mote_id]['neighbor_rssi_sum'][minimal_cell_asn] = neighbor_rssi_sum
             allstats[run_id][mote_id]['network_nodes_num'][minimal_cell_asn] = network_nodes_num
-
-
+            allstats[run_id][mote_id]['minimal_cell_chan_seq'][minimal_cell_asn] = minimal_cell_chan_seq
     # === compute advanced motestats
 
     for (run_id, per_mote_stats) in list(allstats.items()):
@@ -913,32 +912,55 @@ def kpis_all(inputfile):
         avgStates['minimalcell_rx']['num_per_packet_type'][packet_type] = calculate_stats(data)
         avgStates['minimalcell_rx']['rx_rate_per_packet_type'][packet_type] = calculate_stats(data_rate)
 
-    # RPl 타입 패킷에 대해 따로 계산
-    rpl_data = []
-    rpl_data_rate = []
+    # 전체 패킷과 RPl 타입에 대해 따로 계산
+    total_rx_list = []
+    total_rate_list = []
+    rpl_rx_list = []
+    rpl_rate_list = []
 
     for run_id, stats in allstats.items():
-        rpl = 0
+        total_rx = 0
+        total_tx = 0
+        rpl_rx = 0
         rpl_tx = 0
+
         if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type'] and 'DIO' in stats['global-stats']['minimalcell_tx']['num_per_packet_type']:
-            rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIO']
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIO']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type']['DIO']
+            rpl_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIO']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type']['DIO']
 
         if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type'] and 'DIS' in stats['global-stats']['minimalcell_tx']['num_per_packet_type']:
-            rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIS']
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIS']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type']['DIS']
+            rpl_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type']['DIS']
 
-        if rpl_tx != 0:
-            rpl_data.append(rpl)        
-            rpl_data_rate.append(rpl/rpl_tx)
-        else:
-            rpl_data.append(0)        
-            rpl_data_rate.append(0) 
+        if 'EB' in stats['global-stats']['minimalcell_rx']['num_per_packet_type'] and 'EB' in stats['global-stats']['minimalcell_tx']['num_per_packet_type']:
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type']['EB']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type']['EB']
 
-    avgStates['minimalcell_rx']['num_per_packet_type']['rpl'] = calculate_stats(rpl_data)
-    avgStates['minimalcell_rx']['rx_rate_per_packet_type']['rpl'] = calculate_stats(rpl_data_rate)
+        if total_rx != 0:
+            total_rx_list.append(total_rx)        
+            total_rate_list.append(total_rx/total_tx)
+        else:
+            total_rx_list.append(0)        
+            total_rate_list.append(0) 
+
+        if rpl_tx != 0:
+            rpl_rx_list.append(rpl_rx)        
+            rpl_rate_list.append(rpl_rx/rpl_tx)
+        else:
+            rpl_rx_list.append(0)        
+            rpl_rate_list.append(0) 
+
+    avgStates['minimalcell_rx']['num_per_packet_type']['total'] = calculate_stats(total_rx_list)
+    avgStates['minimalcell_rx']['rx_rate_per_packet_type']['total'] = calculate_stats(total_rate_list)
     
- #=========================================================================================================================
+    avgStates['minimalcell_rx']['num_per_packet_type']['rpl'] = calculate_stats(rpl_rx_list)
+    avgStates['minimalcell_rx']['rx_rate_per_packet_type']['rpl'] = calculate_stats(rpl_rate_list)
+
+    #=========================================================================================================================
 
     # 간섭 환경에서 수신 패킷 전체에 패킷별로 평균 계산
     avgStates['minimalcell_rx']['num_per_packet_type_in_if'] = {}
@@ -962,31 +984,53 @@ def kpis_all(inputfile):
         avgStates['minimalcell_rx']['num_per_packet_type_in_if'][packet_type] = calculate_stats(data)
         avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_if'][packet_type] = calculate_stats(data_rate)
 
-    # RPl 타입 패킷에 대해 따로 계산
-    rpl_data = []
-    rpl_data_rate = []
+    # 전체 패킷과 RPl 타입에 대해 따로 계산
+    total_rx_list = []
+    total_rate_list = []
+    rpl_rx_list = []
+    rpl_rate_list = []
 
     for run_id, stats in allstats.items():
-        rpl = 0
+        total_rx = 0
+        total_tx = 0
+        rpl_rx = 0
         rpl_tx = 0
+
         if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if'] and 'DIO' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']:
-            rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIO']
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIO']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']['DIO']
+            rpl_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIO']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']['DIO']
 
         if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if'] and 'DIS' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']:
-            rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIS']
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIS']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']['DIS']
+            rpl_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']['DIS']
 
-        if rpl_tx != 0:
-            rpl_data.append(rpl)        
-            rpl_data_rate.append(rpl/rpl_tx)
+        if 'EB' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if'] and 'EB' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']:
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_if']['EB']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_if']['EB']
+
+        if total_rx != 0:
+            total_rx_list.append(total_rx)        
+            total_rate_list.append(total_rx/total_tx)
         else:
-            rpl_data.append(0)        
-            rpl_data_rate.append(0) 
+            total_rx_list.append(0)        
+            total_rate_list.append(0) 
 
+        if rpl_tx != 0:
+            rpl_rx_list.append(rpl_rx)        
+            rpl_rate_list.append(rpl_rx/rpl_tx)
+        else:
+            rpl_rx_list.append(0)        
+            rpl_rate_list.append(0) 
 
-    avgStates['minimalcell_rx']['num_per_packet_type_in_if']['rpl'] = calculate_stats(rpl_data)
-    avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_if']['rpl'] = calculate_stats(rpl_data_rate)
+    avgStates['minimalcell_rx']['num_per_packet_type_in_if']['total'] = calculate_stats(total_rx_list)
+    avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_if']['total'] = calculate_stats(total_rate_list)
+    
+    avgStates['minimalcell_rx']['num_per_packet_type_in_if']['rpl'] = calculate_stats(rpl_rx_list)
+    avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_if']['rpl'] = calculate_stats(rpl_rate_list)
 
  #=========================================================================================================================
 
@@ -1010,32 +1054,53 @@ def kpis_all(inputfile):
         avgStates['minimalcell_rx']['num_per_packet_type_in_no_if'][packet_type] = calculate_stats(data)
         avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_no_if'][packet_type] = calculate_stats(data_rate)
 
-    # RPl 타입 패킷에 대해 따로 계산
-    rpl_data = []
-    rpl_data_rate = []
+    # 전체 패킷과 RPl 타입에 대해 따로 계산
+    total_rx_list = []
+    total_rate_list = []
+    rpl_rx_list = []
+    rpl_rate_list = []
 
     for run_id, stats in allstats.items():
-        rpl = 0
+        total_rx = 0
+        total_tx = 0
+        rpl_rx = 0
         rpl_tx = 0
 
         if 'DIO' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'] and 'DIO' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']:
-            rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIO']
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIO']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']['DIO']
+            rpl_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIO']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']['DIO']
 
         if 'DIS' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'] and 'DIS' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']:
-            rpl += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIS']
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIS']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']['DIS']
+            rpl_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['DIS']
             rpl_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']['DIS']
 
-        if rpl_tx != 0:
-            rpl_data.append(rpl)        
-            rpl_data_rate.append(rpl/rpl_tx)
+        if 'EB' in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'] and 'EB' in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']:
+            total_rx += stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if']['EB']
+            total_tx += stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']['EB']
+
+        if total_rx != 0:
+            total_rx_list.append(total_rx)        
+            total_rate_list.append(total_rx/total_tx)
         else:
-            rpl_data.append(0)        
-            rpl_data_rate.append(0) 
+            total_rx_list.append(0)        
+            total_rate_list.append(0) 
 
+        if rpl_tx != 0:
+            rpl_rx_list.append(rpl_rx)        
+            rpl_rate_list.append(rpl_rx/rpl_tx)
+        else:
+            rpl_rx_list.append(0)        
+            rpl_rate_list.append(0) 
 
-    avgStates['minimalcell_rx']['num_per_packet_type_in_no_if']['rpl'] = calculate_stats(rpl_data)
-    avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_no_if']['rpl'] = calculate_stats(rpl_data_rate)
+    avgStates['minimalcell_rx']['num_per_packet_type_in_no_if']['total'] = calculate_stats(total_rx_list)
+    avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_no_if']['total'] = calculate_stats(total_rate_list)
+    
+    avgStates['minimalcell_rx']['num_per_packet_type_in_no_if']['rpl'] = calculate_stats(rpl_rx_list)
+    avgStates['minimalcell_rx']['rx_rate_per_packet_type_in_no_if']['rpl'] = calculate_stats(rpl_rate_list)
 
  #=========================================================================================================================
 
@@ -1134,9 +1199,12 @@ def kpis_all(inputfile):
     avgStates['minimal-cell-utilization']  = calculate_stats(minimal_cell_utilization_data)
 
  #=========================================================================================================================
-    # 모든 데이터 수집
-    filled_data_tx = []
+   
+    # 시간에 따른 미니멀셀 혼잡 관련 파라미터 통계
     filled_data_rx_list = [[] for _ in range(1)]
+    filled_data_tx_list = [[] for _ in range(1)]
+    filled_data_chan_seq_list = [[] for _ in range(1)]
+
     filled_data_neighbor = []
     filled_data_neighbor_rssi_sum = []
     filled_data_network_nodes_num = []
@@ -1154,6 +1222,16 @@ def kpis_all(inputfile):
 
                 for i in range(len(result)):
                     filled_data_rx_list[i].append(dict(sorted(result[i].items())))
+                    
+            if 'minimal_cell_chan_seq' in motestats:
+                result = {}
+                for asn, value in motestats['minimal_cell_chan_seq'].items():
+                    for i, chan in enumerate(value):
+                        if i not in result:
+                            result[i] = {}
+                        result[i][asn] = chan
+                for i in range(len(result)):
+                    filled_data_chan_seq_list[i].append(dict(sorted(result[i].items())))
 
             if 'neighbor_num_per_minimal_cell' in motestats:
                 filled_data_neighbor.append(dict(sorted(motestats['neighbor_num_per_minimal_cell'].items())))
@@ -1173,20 +1251,38 @@ def kpis_all(inputfile):
                 for i in range(len(result)):
                     filled_data_minimal_cell_utilization[i].append(dict(sorted(result[i].items())))
 
+            if 'num_minimal_cells_tx' in motestats:
+                result = {}
+                for asn, value in motestats['num_minimal_cells_tx'].items():
+                    for i, tx_num in enumerate(value):
+                        if i not in result:
+                            result[i] = {}
+                        result[i][asn] = tx_num
+
+                for i in range(len(result)):
+                    filled_data_tx_list[i].append(dict(sorted(result[i].items())))
+
         # DataFrame 생성 및 행열 바꾸기
         df_rx_list = []
         for data in filled_data_rx_list:
             df_rx_list.append(pd.DataFrame(data).transpose())
+        df_tx_list = []
+        for data in filled_data_tx_list:
+            df_tx_list.append(pd.DataFrame(data).transpose())
         df_neighbor = pd.DataFrame(filled_data_neighbor).transpose()
         df_neighbor_rssi_minimal = pd.DataFrame(filled_data_neighbor_rssi_sum).transpose()
         df_network_nodes_num = pd.DataFrame(filled_data_network_nodes_num).transpose()
         df_minimal_cell_utilization_list = []
         for data in filled_data_minimal_cell_utilization:
             df_minimal_cell_utilization_list.append(pd.DataFrame(data).transpose())
-
+        df_chan_seq_list = []
+        for data in filled_data_chan_seq_list:
+            df_chan_seq_list.append(pd.DataFrame(data).transpose())
         # 같은 X에 대한 합 계산하여 제일 오른쪽에 추가
         for df_rx in df_rx_list:
             df_rx['rx_sum'] = df_rx.sum(axis=1)
+        for df_tx in df_tx_list:
+            df_tx['tx_sum'] = df_tx.sum(axis=1)
         df_neighbor['neighbor_sum'] = df_neighbor.sum(axis=1)
         df_neighbor_rssi_minimal['rssi_sum'] = df_neighbor_rssi_minimal.sum(axis=1)
     
@@ -1203,15 +1299,33 @@ def kpis_all(inputfile):
             for i, df_rx_ in enumerate(df_rx_list):
                 sheet_name = 'rx_{}'.format(i)  # 시트 이름에 숫자를 붙입니다.
                 df_rx_.to_excel(writer, sheet_name=sheet_name)
+            for i, df_tx_ in enumerate(df_tx_list):
+                sheet_name = 'tx_{}'.format(i)  # 시트 이름에 숫자를 붙입니다.
+                df_tx_.to_excel(writer, sheet_name=sheet_name)
+
             df_neighbor.to_excel(writer, sheet_name='neighbor_sum')
             df_neighbor_rssi_minimal.to_excel(writer, sheet_name='rssi_sum_minimal')
             df_network_nodes_num.to_excel(writer, sheet_name='network_nodes_num')
             for i, df_minimal_cell_utilization in enumerate(df_minimal_cell_utilization_list):
                 sheet_name = 'utilization_{}'.format(i)  # 시트 이름에 숫자를 붙입니다.
                 df_minimal_cell_utilization.to_excel(writer, sheet_name=sheet_name)
+            for i, df_chan_seq_ in enumerate(df_chan_seq_list):
+                sheet_name = 'chan_seq_{}'.format(i)  # 시트 이름에 숫자를 붙입니다.
+                df_chan_seq_.to_excel(writer, sheet_name=sheet_name)
 
             df_sum = pd.DataFrame()
-            df_sum['rx_sum'] = df_rx['rx_sum']
+            for df_rx in df_rx_list:
+                if 'rx_sum' not in df_sum:
+                    df_sum['rx_sum'] = df_rx['rx_sum']
+                else:
+                    df_sum['rx_sum'] += df_rx['rx_sum']
+            for df_tx in df_tx_list:
+                if 'tx_sum' not in df_sum:
+                    df_sum['tx_sum'] = df_tx['tx_sum']
+                else:
+                    df_sum['tx_sum'] += df_tx['tx_sum']
+
+            df_sum['rx/tx'] = df_sum['rx_sum'] / df_sum['tx_sum'] 
             df_sum['neighbor_sum'] = df_neighbor['neighbor_sum']
             df_sum['neighbor_avg'] = df_neighbor['neighbor_sum'] / df_network_nodes_num[0]
 

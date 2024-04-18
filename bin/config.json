@@ -9,7 +9,7 @@
             "exec_numMotes":                               [10]
         },
         "regular": {
-            "exec_numSlotframesPerRun":                    3000,
+            "exec_numSlotframesPerRun":                    10000,
             "exec_minutesPerRun":                          null,
             "exec_randomSeed":                             "random",
 
@@ -37,6 +37,7 @@
             "tsch_slotDuration":                           0.010,
             "tsch_slotframeLength":                        101,
             "tsch_probBcast_ebProb":                       0.1,
+            "tsch_ebPeriod":                               10,
             "tsch_clock_max_drift_ppm":                    30,
             "tsch_clock_frequency":                        32768,
             "tsch_keep_alive_interval":                    0,
@@ -60,7 +61,8 @@
             "motes_eui64":                                 [],
             
             "user_minimlNumChans":                          16,
-            "user_neighbors_num_channel_selection":         true
+            "user_neighbors_num_channel_selection":         true,
+            "user_period_eb":                               true
         }
     },
     "logging":                                             "all",
