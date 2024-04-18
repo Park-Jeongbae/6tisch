@@ -606,7 +606,7 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
     def _calculate_minimal_cell_collision(self):
         # adapt number of cells if necessary
         if d.MSF_MAX_MINIMAL_NUMCELLS * self.settings.user_minimlNumIdx <= self.num_minimal_cells_elapsed:
-            
+
             # 각 미니멀셀에 대해 활용률을 계산한다.
             for i in range(len(self.minimal_cell_utilization)):
                 self.minimal_cell_utilization[i] = self.num_minimal_cells_rx[i] / d.MSF_MAX_MINIMAL_NUMCELLS
