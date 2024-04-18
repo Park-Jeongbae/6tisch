@@ -161,9 +161,9 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
         self.num_minimal_cells_rx = [0 for _ in range(self.settings.user_minimlNumIdx)]
         self.num_minimal_cells_tx = [0 for _ in range(self.settings.user_minimlNumIdx)]
         self.minimal_cell_utilization  = [0 for _ in range(self.settings.user_minimlNumIdx)]
+        self.max_minimal_cell_utilization  = [0 for _ in range(self.settings.user_minimlNumIdx)]
         self.minimal_cell_asn = 0
-        self.q_table_list = [np.zeros((self.settings.user_minimlNumChans, self.settings.user_minimlNumChans)) for _ in range(self.settings.user_minimlNumIdx)]
-        self.q_learning_state = [0 for _ in range(self.settings.user_minimlNumIdx)]
+        self.q_table = np.zeros((self.settings.user_minimlNumChans, self.settings.user_minimlNumChans))
         self.learning_rate = d.INIT_LEARNING_RATE
         self.discount_factor = d.INIT_DISCOUNT_FACTOR
         self.exploration_rate = d.INIT_EXPLORATION_RATE
@@ -630,25 +630,26 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             )
 
             for index in range(self.settings.user_minimlNumIdx):  
-                # 이전에 사용하고 있던 채널이 state
-                now_state = self.q_learning_state[index]
 
-                # 현재 사용하고 있는 채널이 지난 state에서의 action
-                now_action = self.mote.tsch.minimal_cell_channel_offset_sequence[index]
+                chan = self.mote.tsch.minimal_cell_channel_offset_sequence[index]
 
                 # 측정된 셀 유틸리제이션을 통해서 Q-value 업데이트
                 utilization = self.minimal_cell_utilization[index]
-                self.update_q_table(index, now_state, now_action, utilization)
+                
+                # 동일한 인덱스에서 최대치에 비해 얼마나 늘거나 감소했냐에 따라 보상이 정해진다.
+                reward = 0
 
-                # 스테이트를 바꿔준다.
-                next_state = now_action
-                self.q_learning_state[index] = next_state
+                reward = utilization - self.max_minimal_cell_utilization[index]
+                if self.max_minimal_cell_utilization[index] < utilization:
+                    self.max_minimal_cell_utilization[index] = utilization
+                
+                self.update_q_table(index, chan, reward)
 
                 # 다음에 사용할 채널을 선택
-                next_action = self.choose_action(index, next_state)
+                action = self.choose_action(index)
 
                 # 변경될 채널을 시퀀스에 적용
-                self.mote.tsch.minimal_cell_channel_offset_sequence[index] = int(next_action)
+                self.mote.tsch.minimal_cell_channel_offset_sequence[index] = int(action)
             self._reset_minimal_cell_counters()
 
     def _adapt_to_traffic(self, neighbor, cell_opt):
@@ -1511,9 +1512,8 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
         return hash_value & 0xFFFF
     
     # 액션 선택 함수
-    def choose_action(self, index, state):
-        q_table = self.q_table_list[index]
-        if self.settings.user_epsilon_deca:
+    def choose_action(self, state):
+        if self.settings.user_epsilon_decay:
             self.exploration_rate *= d.DECAY_RATE
 
         if random.uniform(0, 1) < self.exploration_rate:
@@ -1521,11 +1521,10 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             return random.choice(range(self.settings.user_minimlNumChans))
         else:
             # Q-value가 가장 큰 행동 선택 (이용)
-            return np.argmax(q_table[state])
+            return np.argmax(self.q_table[state])
         
     # Q-value 업데이트 함수
-    def update_q_table(self, index, state, action, utilization):
-        q_table = self.q_table_list[index]
-        q_value = q_table[state][action]
-        new_q_value = (1 - self.learning_rate) * q_value + self.learning_rate * utilization
-        q_table[state][action] = new_q_value
+    def update_q_table(self, state, action, reward):
+        q_value = self.q_table[state][action]
+        new_q_value = (1 - self.learning_rate) * q_value + self.learning_rate * reward
+        self.q_table[state][action] = new_q_value

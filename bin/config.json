@@ -60,9 +60,9 @@
 
             "motes_eui64":                                 [],
             
-            "user_minimlNumChans":                          4,
-            "user_minimlNumIdx":                            4,  
-            "user_epsilon_deca":                            true,
+            "user_minimlNumChans":                          8,
+            "user_minimlNumIdx":                            5,  
+            "user_epsilon_decay":                           false,
             "user_period_eb":                               true
         }
     },
