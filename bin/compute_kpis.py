@@ -37,11 +37,10 @@ BATTERY_AA_CAPACITY_mAh = 2821.5
 # =========================== decorators ======================================
 
 def openfile(func):
-    def inner(inputfile):
+    def inner(inputfile, *args, **kwargs):
         with open(inputfile, 'r') as f:
-            return func(f)
+            return func(f, *args, **kwargs)
     return inner
-
 # =========================== helpers =========================================
 
 def mean(numbers):
@@ -85,7 +84,7 @@ def init_mote():
 # =========================== KPIs ============================================
 
 @openfile
-def kpis_all(inputfile):
+def kpis_all(inputfile, subfolder):
 
     allstats = {} # indexed by run_id, mote_id
     networkStats = {}
@@ -434,15 +433,7 @@ def kpis_all(inputfile):
 
             allstats[run_id][mote_id]['num_minimal_cells_rx'][minimal_cell_asn] = num_minimal_cells_rx
             allstats[run_id][mote_id]['num_minimal_cells_tx'][minimal_cell_asn] = num_minimal_cells_tx
-
-            for i in range(len(minimal_cell_utilization)):
-                if not allstats[run_id][mote_id].get('minimal_cell_utilization'):
-                    allstats[run_id][mote_id]['minimal_cell_utilization'] = {}
-                if not allstats[run_id][mote_id]['minimal_cell_utilization'].get(minimal_cell_asn):
-                    allstats[run_id][mote_id]['minimal_cell_utilization'][minimal_cell_asn] = {}
-
-                allstats[run_id][mote_id]['minimal_cell_utilization'][minimal_cell_asn][i] = minimal_cell_utilization[i]
-
+            allstats[run_id][mote_id]['minimal_cell_utilization'][minimal_cell_asn] = minimal_cell_utilization
             allstats[run_id][mote_id]['neighbor_num_per_minimal_cell'][minimal_cell_asn] = neighbor_num
             allstats[run_id][mote_id]['neighbor_rssi_sum'][minimal_cell_asn] = neighbor_rssi_sum
             allstats[run_id][mote_id]['network_nodes_num'][minimal_cell_asn] = network_nodes_num
@@ -487,7 +478,6 @@ def kpis_all(inputfile):
     for (run_id, per_mote_stats) in list(allstats.items()):
 
         #-- define stats
-
         app_packets_sent = 0
         app_packets_received = 0
         app_packets_lost = 0
@@ -510,13 +500,11 @@ def kpis_all(inputfile):
                 continue
 
             # counters
-
             app_packets_sent += motestats['upstream_num_tx']
             app_packets_received += motestats['upstream_num_rx']
             app_packets_lost += motestats['upstream_num_lost']
 
             # joining times
-
             if motestats['join_asn'] is not None:
                 joining_times.append(motestats['join_asn'])
 
@@ -528,12 +516,11 @@ def kpis_all(inputfile):
 
             if motestats['rpl_first_asn'] is not None:
                 rpl_first_times.append(motestats['rpl_first_asn'])
-            # latency
 
+            # latency
             us_latencies += motestats['latencies']
 
             # current consumed
-
             charge_consumed.append(motestats['charge'])
             if motestats['lifetime_AA_years'] is not None:
                 lifetimes.append(motestats['lifetime_AA_years'])
@@ -550,22 +537,18 @@ def kpis_all(inputfile):
                 avg_hops.append(motestats['avg_hops'])
 
             # minimal cell utilization
-
             total_sum = 0
             count = 0
-            for sub_dict in motestats["minimal_cell_utilization"].values():
-                for value in sub_dict.values():
-                    total_sum += value
+            for cell_utilization_list in motestats["minimal_cell_utilization"].values():
+                for cell_utilization in cell_utilization_list:
+                    total_sum += cell_utilization
                     count += 1
 
             # 평균을 계산합니다.
-            if count == 0:
-                minimal_cell_utilization.append(0)
-            else:
-                average = total_sum / count
-                minimal_cell_utilization.append(average)
-        #-- save stats
+            average = total_sum / count
+            minimal_cell_utilization.append(average)
 
+        #-- save stats
         allstats[run_id]['global-stats'] = {
             'e2e-upstream-delivery': [
                 {
@@ -1233,23 +1216,22 @@ def kpis_all(inputfile):
                 for i in range(len(result)):
                     filled_data_chan_seq_list[i].append(dict(sorted(result[i].items())))
 
+            if 'minimal_cell_utilization' in motestats:
+                result = {}
+                for asn, value in motestats['minimal_cell_utilization'].items():
+                    for i, minimal_cell_utilization in enumerate(value):
+                        if i not in result:
+                            result[i] = {}
+                        result[i][asn] = minimal_cell_utilization
+                for i in range(len(result)):
+                    filled_data_minimal_cell_utilization[i].append(dict(sorted(result[i].items())))
+
             if 'neighbor_num_per_minimal_cell' in motestats:
                 filled_data_neighbor.append(dict(sorted(motestats['neighbor_num_per_minimal_cell'].items())))
             if 'neighbor_rssi_sum' in motestats:
                 filled_data_neighbor_rssi_sum.append(dict(sorted(motestats['neighbor_rssi_sum'].items())))
             if 'network_nodes_num' in motestats:
                 filled_data_network_nodes_num.append(dict(sorted(motestats['network_nodes_num'].items())))
-
-            if 'minimal_cell_utilization' in motestats:
-                result = {}
-                for key, value in motestats['minimal_cell_utilization'].items():
-                    for sub_key, sub_value in value.items():
-                        if sub_key not in result:
-                            result[sub_key] = {}
-                        result[sub_key][key] = sub_value
-
-                for i in range(len(result)):
-                    filled_data_minimal_cell_utilization[i].append(dict(sorted(result[i].items())))
 
             if 'num_minimal_cells_tx' in motestats:
                 result = {}
@@ -1289,10 +1271,14 @@ def kpis_all(inputfile):
         for i, df_minimal_cell_utilization in enumerate(df_minimal_cell_utilization_list):
             df_minimal_cell_utilization['utilization_sum_{}'.format(i)] = df_minimal_cell_utilization.sum(axis=1)
 
+        folder_path = subfolder + '\\time_series_data'
+        if not os.path.exists(folder_path):  # 폴더가 존재하지 않으면
+            os.makedirs(folder_path)  # 폴더를 생성
+
         # 현재 시간을 이용하여 파일 이름 생성
         current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-        file_name = "mote_{}_{}_{}_({},{},{}).xlsx".format(run_id, file_settings['exec_numMotes'], current_time,file_settings['user_minimlNumChans'],1,d.MSF_MAX_MINIMAL_NUMCELLS)
+        file_name = "{}\mote_{}_{}_{}_({},{},{}).xlsx".format(folder_path, run_id, file_settings['exec_numMotes'], current_time,file_settings['user_minimlNumChans'],1,d.MSF_MAX_MINIMAL_NUMCELLS)
 
         # 엑셀 파일로 저장
         with pd.ExcelWriter(file_name) as writer:
@@ -1456,7 +1442,7 @@ def main():
         print('generating KPIs for {0}'.format(infile))
 
         # gather the kpis
-        avg, kpis = kpis_all(infile)
+        avg, kpis = kpis_all(infile, subfolder)
 
         # print on the terminal
         # print(json.dumps(kpis, indent=4))
