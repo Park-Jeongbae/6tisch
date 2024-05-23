@@ -545,8 +545,11 @@ def kpis_all(inputfile, subfolder):
                     count += 1
 
             # 평균을 계산합니다.
-            average = total_sum / count
-            minimal_cell_utilization.append(average)
+            if count != 0:
+                average = total_sum / count
+                minimal_cell_utilization.append(average)
+            else:
+                minimal_cell_utilization.append(0)
 
         #-- save stats
         allstats[run_id]['global-stats'] = {
@@ -1183,17 +1186,17 @@ def kpis_all(inputfile, subfolder):
 
  #=========================================================================================================================
    
-    # 시간에 따른 미니멀셀 혼잡 관련 파라미터 통계
-    filled_data_rx_list = [[] for _ in range(file_settings['user_minimlNumIdx'])]
-    filled_data_tx_list = [[] for _ in range(file_settings['user_minimlNumIdx'])]
-    filled_data_chan_seq_list = [[] for _ in range(file_settings['user_minimlNumIdx'])]
-
-    filled_data_neighbor = []
-    filled_data_neighbor_rssi_sum = []
-    filled_data_network_nodes_num = []
-    filled_data_minimal_cell_utilization = [[] for _ in range(file_settings['user_minimlNumIdx'])]
-
     for (run_id, per_mote_stats) in allstats.items():
+        # 시간에 따른 미니멀셀 혼잡 관련 파라미터 통계
+        filled_data_rx_list = [[] for _ in range(1)]
+        filled_data_tx_list = [[] for _ in range(1)]
+        filled_data_chan_seq_list = [[] for _ in range(1)]
+
+        filled_data_neighbor = []
+        filled_data_neighbor_rssi_sum = []
+        filled_data_network_nodes_num = []
+        filled_data_minimal_cell_utilization = [[] for _ in range(1)]
+
         for (mote_id, motestats) in per_mote_stats.items():
             if 'num_minimal_cells_rx' in motestats:
                 result = {}
