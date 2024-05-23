@@ -79,6 +79,8 @@ def init_mote():
         'neighbor_rssi_sum' : {},
         'network_nodes_num' : {},
         'minimal_cell_chan_seq' : {},
+        'received_dio_id_list' : [], 
+        'received_dio_parent_id_list' : [], 
     }
 
 # =========================== KPIs ============================================
@@ -323,6 +325,19 @@ def kpis_all(inputfile, subfolder):
                 allstats[run_id][mote_id]['rpl_join'] = True
                 allstats[run_id][mote_id]['rpl_asn']  = asn
                 allstats[run_id][mote_id]['rpl_time_s'] = asn*file_settings['tsch_slotDuration']
+        # 모든 DIO 수신 내역에 대해 저장함
+        elif logline['_type'] == SimLog.LOG_RPL_DIO_RX['type']:
+            
+            mote_id = logline['_mote_id']
+            src_id = logline['src_id']
+            is_preferred_parent = logline['is_preferred_parent']
+
+            # 모든 DIO 수신 시 송신자 아이디 저장
+            allstats[run_id][mote_id]['received_dio_id_list'].append(src_id)
+
+            # 부모에게 받았을 경우 따로 저장
+            if is_preferred_parent:
+                allstats[run_id][mote_id]['received_dio_parent_id_list'].append(src_id)
 
         # 미니멀 셀에서 전송된 패킷의 수신 결과를 저장함
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_RX['type']:
@@ -1147,6 +1162,37 @@ def kpis_all(inputfile, subfolder):
                 num_mote += 1
         neighbor_num_avg_data.append(neighbor_num_sum/num_mote)
     avgStates['neighbor_num']  =  calculate_stats(neighbor_num_avg_data)
+
+ #=========================================================================================================================
+
+    # 부모로부터 DIO를 수신한 횟수를 구함
+    received_dio_parent_id_num_avg_data = []
+    for run_id, per_mote_stats in allstats.items():
+        received_dio_parent_id_num_sum = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'received_dio_parent_id_list' in motestats:
+                received_dio_parent_id_num_sum += len(motestats['received_dio_parent_id_list'])
+                num_mote += 1
+        received_dio_parent_id_num_avg_data.append(received_dio_parent_id_num_sum / num_mote)
+
+    avgStates['rpl_received_dio_num_from_parent'] = calculate_stats(received_dio_parent_id_num_avg_data)
+
+ #=========================================================================================================================
+
+    # DIO를 수신한 장치의 수를 구함
+    received_dio_id_num_avg_data = []
+    for run_id, per_mote_stats in allstats.items():
+        received_dio_id_num_sum = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'received_dio_id_list' in motestats:
+                unique_received_dio_ids = len(set(motestats['received_dio_id_list']))
+                received_dio_id_num_sum += unique_received_dio_ids
+                num_mote += 1
+        received_dio_id_num_avg_data.append(received_dio_id_num_sum / num_mote)
+
+    avgStates['rpl_received_dio_ids_num'] = calculate_stats(received_dio_id_num_avg_data)
 
  #=========================================================================================================================
 

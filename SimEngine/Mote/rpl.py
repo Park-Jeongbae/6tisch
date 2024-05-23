@@ -69,6 +69,7 @@ class Rpl(object):
         self.parentChildfromDAOs       = {}      # dictionary containing parents of each node
         self._tx_stat                  = {}      # indexed by mote_id
         self.dis_mode = self._get_dis_mode()
+        self.dio_set = set()
 
     #======================== public ==========================================
 
@@ -322,9 +323,21 @@ class Rpl(object):
         if not self.mote.secjoin.getIsJoined():
             return
 
-        # abort if I'm the DAGroot (I don't need to parse a DIO)
-        if self.mote.dagRoot:
-            return
+        # mac addr로부터 ID를 추출
+        src_mac_addr = packet['mac']['srcMac']
+        cleaned_hex_string = src_mac_addr.replace('-', '')
+        last_four_hex = cleaned_hex_string[-4:]
+        src_id = int(last_four_hex, 16)
+
+        is_preferred_parent = False
+        if self.getPreferredParent() is not None:
+            preferred_parent_mac_addr = self.getPreferredParent()
+            cleaned_hex_string = preferred_parent_mac_addr.replace('-', '')
+            last_four_hex = cleaned_hex_string[-4:]
+            preferred_parent_id = int(last_four_hex, 16)
+
+            if preferred_parent_id == src_id:
+                is_preferred_parent = True
 
         # log
         self.log(
@@ -332,8 +345,14 @@ class Rpl(object):
             {
                 u'_mote_id':  self.mote.id,
                 u'packet':    packet,
+                u'src_id':    src_id,
+                u'is_preferred_parent': is_preferred_parent,
             }
         )
+
+        # abort if I'm the DAGroot (I don't need to parse a DIO)
+        if self.mote.dagRoot:
+            return
 
         # handle the infinite rank
         if packet[u'app'][u'rank'] == d.RPL_INFINITE_RANK:
