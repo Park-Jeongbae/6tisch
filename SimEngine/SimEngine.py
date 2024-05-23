@@ -334,7 +334,7 @@ class DiscreteEventEngine(threading.Thread):
         slotframe_iteration = int(old_div(self.asn, self.settings.tsch_slotframeLength))
 
         # print
-        if self.verbose:
+        if self.verbose and slotframe_iteration % 1000 == 0:
             print(u'   slotframe_iteration: {0}/{1}'.format(slotframe_iteration, self.settings.exec_numSlotframesPerRun-1))
 
         # schedule next statistics collection

@@ -155,7 +155,7 @@ class Connectivity(object):
             if len(transmissions_by_channel) > 0: 
                 # 미니멀셀에서 패킷이 전송된 채널 별로 정리
                 for channel in transmissions_by_channel.keys():
-                    count_per_packet_type = {}
+                    num_per_packet_type = {}
 
                     is_interference = False
                     if  len(transmissions_by_channel[channel]) > 1:
@@ -164,17 +164,17 @@ class Connectivity(object):
                     # 각 채널에서 전송된 패킷의 종류와 개수를 저장함
                     for t in transmissions_by_channel[channel]:
                         packet_type = t[u'packet'][u'type']
-                        if packet_type not in count_per_packet_type:
-                            count_per_packet_type[packet_type] = 1
+                        if packet_type not in num_per_packet_type:
+                            num_per_packet_type[packet_type] = 1
                         else:
-                            count_per_packet_type[packet_type] += 1
+                            num_per_packet_type[packet_type] += 1
 
                     # 로그를 남김
                     self.log(
-                        SimLog.LOG_USER_MINIMALCELL_PACKETS,
+                        SimLog.LOG_USER_MINIMALCELL_TX,
                         {
                             u'channel' : channel,
-                            u'count_per_packet_type' : count_per_packet_type,
+                            u'num_per_packet_type' : num_per_packet_type,
                             u'is_interference' : is_interference
                         }
                     )
@@ -199,7 +199,7 @@ class Connectivity(object):
             for t in transmissions_by_channel[channel]:
                 self.engine.motes[t[u'tx_mote_id']].radio.txDone(False)
 
-        txResults = []
+        rx_status = []
         # prosses packets sent on channels with listeners
         for channel in set(transmissions_by_channel.keys()) & set(receivers_by_channel.keys()):
             assert channel in d.TSCH_HOPPING_SEQUENCE[:self.num_channels]
@@ -311,13 +311,18 @@ class Connectivity(object):
                 if lockon_random_value < packet_pdr:
                     # listener receives!
 
+                    # 리스너는 RSSI를 이웃에 대한 RSSI를 저장한다.
+                    src_id  = lockon_transmission[u'tx_mote_id'],
+                    rssi = _pdr_to_rssi(packet_pdr)
+
                     # 미니멀 셀에서 데이터가 수신 성공한 경우
                     if asn % self.settings.tsch_slotframeLength == 0 :
 
-                        txResults.append({  u'channel' : channel,
-                                            u'count_per_packet_type' : packet_type,
+                        rx_status.append({  u'channel' : channel,
+                                            u'num_per_packet_type' : lockon_transmission[u'packet'][u'type'],
                                             u'is_interference' : is_interference_packet,
-                                            u'is_recv_success' : True })      
+                                            u'is_recv_success' : True })
+                        self.engine.motes[listener_id].tsch.neighbor_rssi_table[src_id] = rssi
 
                     # lockon_transmission received correctly
                     receivedAck = self.engine.motes[listener_id].radio.rxDone(
@@ -345,8 +350,8 @@ class Connectivity(object):
 
                     # 미니멀 셀에서 데이터가 수신 실패한 경우
                     if asn % self.settings.tsch_slotframeLength == 0 :
-                        txResults.append({  u'channel' : channel,
-                                            u'count_per_packet_type' : packet_type,
+                        rx_status.append({  u'channel' : channel,
+                                            u'num_per_packet_type' : lockon_transmission[u'packet'][u'type'],
                                             u'is_interference' : is_interference_packet,
                                             u'is_recv_success' : False })
 
@@ -383,11 +388,11 @@ class Connectivity(object):
                 self.engine.motes[t[u'tx_mote_id']].radio.txDone(isACKed)
 
         #여기 로그를 남긴다
-        if txResults:
+        if rx_status:
             self.log(
-                SimLog.LOG_USER_MINIMALCELL_TRANS_RESULT,
+                SimLog.LOG_USER_MINIMALCELL_RX,
                 {
-                    u'txResults' : txResults,
+                    u'rx_status' : rx_status,
                 }
             )
 
@@ -551,6 +556,59 @@ class Connectivity(object):
 
         return pdr
 
+import math
+
+def _pdr_to_rssi(pdr):
+    """
+    Convert PDR to corresponding RSSI using linear interpolation
+    """
+    rssi_pdr_table = {
+        0.0000: -97,  # this value is not from experiment
+        0.1494: -96,
+        0.2340: -95,
+        0.4071: -94,
+        # <-- 50% PDR is here, at RSSI=-93.6
+        0.6359: -93,
+        0.6866: -92,
+        0.7476: -91,
+        0.8603: -90,
+        0.8702: -89,
+        0.9324: -88,
+        0.9427: -87,
+        0.9562: -86,
+        0.9611: -85,
+        0.9739: -84,
+        0.9745: -83,
+        0.9844: -82,
+        0.9854: -81,
+        0.9903: -80,
+        1.0000: -79,  # this value is not from experiment
+    }
+
+    sorted_pdrs = sorted(rssi_pdr_table.keys())
+    minPdr = min(sorted_pdrs)
+    maxPdr = max(sorted_pdrs)
+
+    if pdr <= minPdr:
+        return rssi_pdr_table[minPdr]
+    elif pdr >= maxPdr:
+        return rssi_pdr_table[maxPdr]
+
+    # Find the two PDR values between which the target PDR falls
+    lowPdr = maxPdr
+    highPdr = minPdr
+    for p in sorted_pdrs:
+        if p <= pdr < lowPdr:
+            lowPdr = p
+        if p >= pdr > highPdr:
+            highPdr = p
+
+    # Linear interpolation
+    lowRssi = rssi_pdr_table[lowPdr]
+    highRssi = rssi_pdr_table[highPdr]
+    rssi = (highRssi - lowRssi) * (pdr - lowPdr) / (highPdr - lowPdr) + lowRssi
+
+    return rssi
 
 class ConnectivityMatrixBase(object):
     LINK_PERFECT = {u'pdr' : 1.00, u'rssi':  -10}

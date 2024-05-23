@@ -83,6 +83,7 @@ SIXP_CALLBACK_EVENT_ABORTED                 = u'aborted'
 
 # === sf
 MSF_MAX_NUMCELLS                            = 100
+MSF_MAX_MINIMAL_NUMCELLS                    = 10
 MSF_LIM_NUMCELLSUSED_HIGH                   = 0.75 # in [0-1]
 MSF_LIM_NUMCELLSUSED_LOW                    = 0.25 # in [0-1]
 MSF_HOUSEKEEPINGCOLLISION_PERIOD            = 60   # in seconds

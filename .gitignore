@@ -12,7 +12,7 @@ Thumbs.db
 /bin/simData/
 /gui/simData/
 /gui/backend/var/
-
+*.xlsx
 # pycharm
 .idea/
 .cache/
