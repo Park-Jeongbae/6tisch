@@ -1,8 +1,8 @@
 {
     "version":                                             0,
     "execution": {
-        "numCPUs":                                         1,
-        "numRuns":                                         1
+        "numCPUs":                                         -1,
+        "numRuns":                                         15
     },
     "settings": {
         "combination": {
@@ -59,14 +59,11 @@
             "phy_numChans":                                16,
 
             "motes_eui64":                                 [],
-            
-            "user_minimlNumChans":                          16,
-            "user_neighbors_num_channel_selection":         true,
-            "user_period_eb":                               true
+            "user_period_eb":                              false
         }
     },
     "logging":                                             "all",
-    "log_directory_name":                                  "startTime",
+    "log_directory_name":                                  "hostname",
     "post": [
         "python compute_kpis.py",
         "python plot.py"
