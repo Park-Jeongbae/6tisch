@@ -70,6 +70,7 @@ class Rpl(object):
         self._tx_stat                  = {}      # indexed by mote_id
         self.dis_mode = self._get_dis_mode()
         self.dio_set = set()
+        self.rank_list = []
 
     #======================== public ==========================================
 
@@ -347,6 +348,7 @@ class Rpl(object):
                 u'packet':    packet,
                 u'src_id':    src_id,
                 u'is_preferred_parent': is_preferred_parent,
+                u'rank': packet[u'app'][u'rank'],
             }
         )
 
