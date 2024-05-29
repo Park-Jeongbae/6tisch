@@ -80,7 +80,8 @@ def init_mote():
         'network_nodes_num' : {},
         'minimal_cell_chan_seq' : {},
         'received_dio_id_list' : [], 
-        'received_dio_parent_id_list' : [], 
+        'received_dio_parent_id_list' : [],
+        'received_dio_rank_list' : [],
     }
 
 # =========================== KPIs ============================================
@@ -331,6 +332,7 @@ def kpis_all(inputfile, subfolder):
             mote_id = logline['_mote_id']
             src_id = logline['src_id']
             is_preferred_parent = logline['is_preferred_parent']
+            rank = logline['rank']
 
             # 모든 DIO 수신 시 송신자 아이디 저장
             allstats[run_id][mote_id]['received_dio_id_list'].append(src_id)
@@ -339,6 +341,7 @@ def kpis_all(inputfile, subfolder):
             if is_preferred_parent:
                 allstats[run_id][mote_id]['received_dio_parent_id_list'].append(src_id)
 
+            allstats[run_id][mote_id]['received_dio_rank_list'].append(rank)
         # 미니멀 셀에서 전송된 패킷의 수신 결과를 저장함
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_RX['type']:
 
@@ -1193,6 +1196,37 @@ def kpis_all(inputfile, subfolder):
         received_dio_id_num_avg_data.append(received_dio_id_num_sum / num_mote)
 
     avgStates['rpl_received_dio_ids_num'] = calculate_stats(received_dio_id_num_avg_data)
+ #=========================================================================================================================
+
+    # DIO의 rank 및 수신 횟수에 대해 조사
+    rpl_received_dio_rank_max_data = []
+    rpl_received_dio_rank_min_data = []
+    rpl_received_dio_rank_mean_data = []
+    rpl_received_dio_num_data = []
+
+    for run_id, per_mote_stats in allstats.items():
+        rank_max = 0
+        rank_min = 0
+        rank_mean = 0
+        num = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'received_dio_rank_list' in motestats:
+                rank_max = max(motestats['received_dio_rank_list'])
+                rank_min = min(motestats['received_dio_rank_list'])
+                rank_mean = sum(motestats['received_dio_rank_list'])/ len(motestats['received_dio_rank_list'])
+                num = len(motestats['received_dio_rank_list'])
+                num_mote += 1
+
+        rpl_received_dio_rank_max_data.append(rank_max/num_mote)
+        rpl_received_dio_rank_min_data.append(rank_min/num_mote)
+        rpl_received_dio_rank_mean_data.append(rank_mean/num_mote)
+        rpl_received_dio_num_data.append(num/num_mote)
+
+    avgStates['rpl_received_dio_rank_max'] = calculate_stats(rpl_received_dio_rank_max_data)
+    avgStates['rpl_received_dio_rank_min'] = calculate_stats(rpl_received_dio_rank_min_data)
+    avgStates['rpl_received_dio_rank_mean'] = calculate_stats(rpl_received_dio_rank_mean_data)
+    avgStates['rpl_received_dio_num'] = calculate_stats(rpl_received_dio_num_data)
 
  #=========================================================================================================================
 
