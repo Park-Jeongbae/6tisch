@@ -1202,32 +1202,27 @@ def kpis_all(inputfile, subfolder):
     rpl_received_dio_rank_max_data = []
     rpl_received_dio_rank_min_data = []
     rpl_received_dio_rank_mean_data = []
-    rpl_received_dio_num_data = []
 
     for run_id, per_mote_stats in allstats.items():
         rank_max = 0
         rank_min = 0
         rank_mean = 0
-        num = 0
         num_mote = 0
         for mote_id, motestats in per_mote_stats.items():
             if 'received_dio_rank_list' in motestats:
                 rank_list = list(motestats['received_dio_rank_list'].values())
-                rank_max = max(rank_list)
-                rank_min = min(rank_list)
-                rank_mean = sum(rank_list)/ len(rank_list)
-                num = len(rank_list)
+                rank_max += max(rank_list)
+                rank_min += min(rank_list)
+                rank_mean += sum(rank_list)/ len(rank_list)
                 num_mote += 1
 
         rpl_received_dio_rank_max_data.append(rank_max/num_mote)
         rpl_received_dio_rank_min_data.append(rank_min/num_mote)
         rpl_received_dio_rank_mean_data.append(rank_mean/num_mote)
-        rpl_received_dio_num_data.append(num/num_mote)
 
     avgStates['rpl_received_dio_rank_max'] = calculate_stats(rpl_received_dio_rank_max_data)
     avgStates['rpl_received_dio_rank_min'] = calculate_stats(rpl_received_dio_rank_min_data)
     avgStates['rpl_received_dio_rank_mean'] = calculate_stats(rpl_received_dio_rank_mean_data)
-    avgStates['rpl_received_dio_num'] = calculate_stats(rpl_received_dio_num_data)
 
  #=========================================================================================================================
 
