@@ -81,7 +81,7 @@ def init_mote():
         'minimal_cell_chan_seq' : {},
         'received_dio_id_list' : [], 
         'received_dio_parent_id_list' : [],
-        'received_dio_rank_list' : [],
+        'received_dio_rank_list' : {},
     }
 
 # =========================== KPIs ============================================
@@ -341,7 +341,7 @@ def kpis_all(inputfile, subfolder):
             if is_preferred_parent:
                 allstats[run_id][mote_id]['received_dio_parent_id_list'].append(src_id)
 
-            allstats[run_id][mote_id]['received_dio_rank_list'].append(rank)
+            allstats[run_id][mote_id]['received_dio_rank_list'][src_id] = rank
         # 미니멀 셀에서 전송된 패킷의 수신 결과를 저장함
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_RX['type']:
 
@@ -1212,10 +1212,11 @@ def kpis_all(inputfile, subfolder):
         num_mote = 0
         for mote_id, motestats in per_mote_stats.items():
             if 'received_dio_rank_list' in motestats:
-                rank_max = max(motestats['received_dio_rank_list'])
-                rank_min = min(motestats['received_dio_rank_list'])
-                rank_mean = sum(motestats['received_dio_rank_list'])/ len(motestats['received_dio_rank_list'])
-                num = len(motestats['received_dio_rank_list'])
+                rank_list = list(motestats['received_dio_rank_list'].values())
+                rank_max = max(rank_list)
+                rank_min = min(rank_list)
+                rank_mean = sum(rank_list)/ len(rank_list)
+                num = len(rank_list)
                 num_mote += 1
 
         rpl_received_dio_rank_max_data.append(rank_max/num_mote)
