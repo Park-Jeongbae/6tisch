@@ -82,6 +82,8 @@ def init_mote():
         'received_dio_id_list' : [], 
         'received_dio_parent_id_list' : [],
         'received_dio_rank_list' : {},
+        'desync_asn' : [],
+        'keep_alive_asn' : []
     }
 
 # =========================== KPIs ============================================
@@ -152,6 +154,14 @@ def kpis_all(inputfile, subfolder):
 
             # 비동기화된 모트들을 삭제함
             networkStats[run_id]['sync_motes'][mote_id] = False
+            allstats[run_id][mote_id]['desync_asn'].append(asn)
+        elif logline['_type'] == SimLog.LOG_TSCH_TXDONE['type']:
+            # shorthands
+            mote_id    = logline['_mote_id']
+            packet     = logline['packet']
+
+            if packet[u'type'] == d.PKT_TYPE_KEEP_ALIVE:
+                allstats[run_id][mote_id]['keep_alive_asn'].append(asn) 
 
         elif logline['_type'] == SimLog.LOG_SECJOIN_JOINED['type']:
             # joined
@@ -854,7 +864,14 @@ def kpis_all(inputfile, subfolder):
 
     # num_collision_cell 평균 계산
     avgStates['minimalcell_tx']['num_collision_cell'] = {}
-    num_collision_cell_data = [stats['global-stats']['minimalcell_tx']['num_collision_cell'] for run_id, stats in allstats.items()]
+    num_collision_cell_data = []
+    for run_id, stats in allstats.items():
+        # 각 실행의 통계 데이터에서 'num_collision_cell' 값을 가져옴
+        if 'num_collision_cell' in stats['global-stats']['minimalcell_tx']:
+            num_collision_cell_value = stats['global-stats']['minimalcell_tx']['num_collision_cell']
+            # 가져온 값을 리스트에 추가
+            num_collision_cell_data.append(num_collision_cell_value)
+
     avgStates['minimalcell_tx']['num_collision_cell'] = calculate_stats(num_collision_cell_data)
 
  #=========================================================================================================================
@@ -1198,6 +1215,35 @@ def kpis_all(inputfile, subfolder):
     avgStates['rpl_received_dio_ids_num'] = calculate_stats(received_dio_id_num_avg_data)
  #=========================================================================================================================
 
+    # 비동기화 횟수를 구함
+    desync_num_avg_data = []
+    for run_id, per_mote_stats in allstats.items():
+        desync_num_sum = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'desync_asn' in motestats:
+                desync_num = len(motestats['desync_asn'])
+                desync_num_sum += desync_num
+                num_mote += 1
+        desync_num_avg_data.append(desync_num_sum / num_mote)
+
+    avgStates['desync_num'] = calculate_stats(desync_num_avg_data)
+ #=========================================================================================================================
+ 
+    # keep alive 패킷 개수를 구함
+    kp_num_avg_data = []
+    for run_id, per_mote_stats in allstats.items():
+        kp_num_sum = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'keep_alive_asn' in motestats:
+                kp_num = len(motestats['keep_alive_asn'])
+                kp_num_sum += kp_num
+                num_mote += 1
+        kp_num_avg_data.append(kp_num_sum / num_mote)
+
+    avgStates['keep_alive_asn'] = calculate_stats(kp_num_avg_data)
+ #=========================================================================================================================
     # DIO의 rank 및 수신 횟수에 대해 조사
     rpl_received_dio_rank_max_data = []
     rpl_received_dio_rank_min_data = []
