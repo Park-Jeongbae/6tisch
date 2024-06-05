@@ -347,6 +347,7 @@ class Rpl(object):
                 u'packet':    packet,
                 u'src_id':    src_id,
                 u'is_preferred_parent': is_preferred_parent,
+                u'rank': packet[u'app'][u'rank'],
             }
         )
 
