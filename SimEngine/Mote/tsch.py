@@ -123,7 +123,6 @@ class Tsch(object):
             else:
                 self._start_keep_alive_timer()
                 self._start_synchronization_timer()
-                self._start_sendEB_timer()
 
             # start SF
             self.mote.sf.start()
@@ -249,7 +248,7 @@ class Tsch(object):
         self.iAmSendingEBs = True
 
     def stopSendingEBs(self):
-        self.iAmSendingEBs = True
+        self.iAmSendingEBs = False   # False여야 할 거 같아서 수정
 
     def schedule_next_listeningForEB_cell(self):
 
@@ -1054,10 +1053,11 @@ class Tsch(object):
                 )
                 # update cell stats
                 self.active_cell.increment_num_tx()
-                if self.pktToSend[u'mac'][u'dstMac'] == self.clock.source:
-                    # we're going to send a frame to our time source; reset the
-                    # keep-alive timer
-                    self._reset_keep_alive_timer()
+                # 전송하는 패킷이 부모노드라도 ACK가 와야지 재동기화를 진행하고 KA 타이머를 초기화해야함
+                # if self.pktToSend[u'mac'][u'dstMac'] == self.clock.source:
+                #     # we're going to send a frame to our time source; reset the
+                #     # keep-alive timer
+                #     self._reset_keep_alive_timer()
         else:
             # do nothing
             pass
