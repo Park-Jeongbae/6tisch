@@ -158,6 +158,10 @@ class Rpl(object):
             # start the DIS timer
             self.start_dis_timer()
         else:
+            # 부모가 정해졌으므로 EB 전송을 시작한다.
+            if old_preferred is None:
+                self.mote.tsch._start_sendEB_timer()
+
             # trigger DAO
             self._schedule_sendDAO(firstDAO=True)
 
