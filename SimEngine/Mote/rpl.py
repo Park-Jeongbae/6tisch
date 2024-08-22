@@ -139,6 +139,10 @@ class Rpl(object):
             }
         )
 
+        # 클럭소스가 변경된다면 새로운 EB를 수신해야한다.
+        if self.mote.tsch.clock.source != new_preferred:
+            self.mote.tsch.csEbTxAsn = None
+
         if new_preferred is None:
             assert old_preferred
             # stop the DAO timer

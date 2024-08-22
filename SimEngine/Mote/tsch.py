@@ -84,6 +84,8 @@ class Tsch(object):
         self.pending_bit_enabled            = False
         self.args_for_next_pending_bit_task = None
 
+        self.csEbTxAsn = None
+        self.nextEbTxAsn = None
         assert self.settings.phy_numChans <= len(d.TSCH_HOPPING_SEQUENCE)
         self.hopping_sequence = (
             d.TSCH_HOPPING_SEQUENCE[:self.settings.phy_numChans]
@@ -131,6 +133,9 @@ class Tsch(object):
             self.engine.removeFutureEvent(      # remove previously scheduled listeningForEB cells
                 uniqueTag=(self.mote.id, u'_action_listeningForEB_cell')
             )
+
+            # CS로부터 EB를 수신했을 때 ASN
+            self.csEbTxAsn = self.engine.getAsn()
         else:
             # log
             self.log(
@@ -164,6 +169,8 @@ class Tsch(object):
                 uniqueTag=(self.mote.id, u'_action_active_cell')
             )
             self.schedule_next_listeningForEB_cell()
+
+            self.csEbTxAsn = None
 
     def get_busy_slots(self, slotframe_handle=0):
         if slotframe_handle in self.slotframes:
@@ -499,11 +506,29 @@ class Tsch(object):
         packet_to_send = None
         if dst_mac_addr is None:
             if cell.link_type in [d.LINKTYPE_ADVERTISING,d.LINKTYPE_ADVERTISING_ONLY]:
-                for packet in self.txQueue:
-                    if packet['mac']['dstMac'] == d.BROADCAST_ADDRESS:
-                        packet_to_send = packet
-                    if packet_to_send is not None:
-                        break
+
+                # 루트는 상관없이 매번 패킷을 전송
+                if self.mote.dagRoot:
+                    for packet in self.txQueue:
+                        if packet['mac']['dstMac'] == d.BROADCAST_ADDRESS:
+                            packet_to_send = packet
+                            break
+                else:
+                    # CS의 EB 전송 시점을 모를 경우 자식 노드를 위해 EB는 전송한다.
+                    if self.csEbTxAsn is None:
+                        for packet in self.txQueue:
+                            if packet['mac']['dstMac'] == d.BROADCAST_ADDRESS and packet['type'] == d.PKT_TYPE_EB:
+                                packet_to_send = packet
+                                break
+                    # CS의 EB 전송 시점을 알 경우 해당 시점에만 수신 대기한다.
+                    else:
+                        if abs(self.engine.getAsn() - self.csEbTxAsn) % (self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod) == 0:
+                                return None
+                        
+                        for packet in self.txQueue:
+                            if packet['mac']['dstMac'] == d.BROADCAST_ADDRESS:
+                                packet_to_send = packet
+                                break
             else:
                 # return the first one in the TX queue, whose destination MAC
                 # is not associated with any of allocated (dedicated) TX cells
@@ -642,6 +667,12 @@ class Tsch(object):
                     self._reset_keep_alive_timer()
                     self._reset_synchronization_timer()
 
+                    cs_mac_addr = self.clock.source
+                    cleaned_hex_string = cs_mac_addr.replace('-', '')
+                    last_four_hex = cleaned_hex_string[-4:]
+                    cs_id = int(last_four_hex, 16)
+            
+                    self.csEbTxAsn = self.engine.motes[cs_id].tsch.nextEbTxAsn
                 # remove packet from queue
                 self.dequeue(self.pktToSend)
 
@@ -1049,7 +1080,7 @@ class Tsch(object):
                 assert self.active_cell.is_tx_on()
                 self._action_TX(
                     pktToSend = self.pktToSend,
-                    channel   = self._get_physical_channel(self.active_cell)
+                    channel   = self._get_physical_channel(self.active_cell,self.pktToSend[u'type'])
                 )
                 # update cell stats
                 self.active_cell.increment_num_tx()
@@ -1116,14 +1147,51 @@ class Tsch(object):
 
         # start listening
         self.mote.radio.startRx(
-            channel = self._get_physical_channel(self.active_cell)
+            channel = self._get_physical_channel(self.active_cell,None)
         )
 
         # indicate that we're waiting for the RX operation to finish
         self.waitingFor = d.WAITING_FOR_RX
 
-    def _get_physical_channel(self, cell):
+    def _get_physical_channel(self, cell, pakcet_type):
         # see section 6.2.6.3 of IEEE 802.15.4-2015
+        if self.getIsSync():
+            # 미니멀 셀일 경우
+            if self.engine.getAsn() % self.settings.tsch_slotframeLength == 0:
+                channel_offset = 0
+
+                if self.mote.dagRoot:
+                    pass 
+                elif pakcet_type is not None: # 패킷 전송 시
+
+                    # EB일 경우
+                    if pakcet_type == d.PKT_TYPE_EB:
+                        channel_offset = self.mote.id % (self.settings.phy_numChans - 1) + 1 # EB 인덱스에서는 나의 ID 기반 채널 오프셋
+                    else:
+                        # 나머지 패킷은 채널오프셋 0
+                        pass
+
+                else: # 패킷 수신 시
+
+                    # Mac addr로부터 ID를 추출
+                    cs_mac_addr = self.clock.source
+                    cleaned_hex_string = cs_mac_addr.replace('-', '')
+                    last_four_hex = cleaned_hex_string[-4:]
+                    cs_id = int(last_four_hex, 16)
+
+                    # 부모의 EB 주기를 모르거나, 부모의 EB 인덱스일 경우 부모 ID 기반 수신
+                    if self.csEbTxAsn is None or \
+                       self.csEbTxAsn is not None and abs(self.engine.getAsn() - self.csEbTxAsn) % (self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod) == 0:
+                        channel_offset = cs_id % (self.settings.phy_numChans - 1) + 1
+                    else:
+                        # 나머지 패킷은 채널오프셋 0
+                        pass
+
+                return self.hopping_sequence[
+                    (self.engine.getAsn() + int(channel_offset)) %
+                    len(self.hopping_sequence)
+                ]
+
         return self.hopping_sequence[
             (self.engine.getAsn() + cell.channel_offset) %
             len(self.hopping_sequence)
@@ -1209,6 +1277,10 @@ class Tsch(object):
                 self.engine.removeFutureEvent(event_tag)
             else:
                 assert len(self.received_eb_list) < d.TSCH_NUM_NEIGHBORS_TO_WAIT
+        else:
+            if self.csEbTxAsn is None and packet[u'mac'][u'srcMac'] == self.clock.source:
+                self.csEbTxAsn = self.engine.getAsn()
+
 
     # Retransmission backoff algorithm
     def _is_retransmission(self, packet):
@@ -1410,10 +1482,25 @@ class Tsch(object):
     def _start_sendEB_timer(self):
         asnNow = self.engine.getAsn()
 
+        nextCreateAsn = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod
+        nextEbTxAsn = asnNow + self.settings.tsch_slotframeLength * (self.settings.tsch_ebPeriod + 1)
+
+        if self.csEbTxAsn is not None:
+            # 내 주기와 부모 주기가 동일할 경우
+            if abs(nextEbTxAsn - self.csEbTxAsn) % (self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod) == 0:
+                nextCreateAsn += self.settings.tsch_slotframeLength 
+
+                cs_mac_addr = self.clock.source
+                cleaned_hex_string = cs_mac_addr.replace('-', '')
+                last_four_hex = cleaned_hex_string[-4:]
+                cs_id = int(last_four_hex, 16)
+
+        self.nextEbTxAsn = nextCreateAsn + self.settings.tsch_slotframeLength 
+
         if self.settings.user_period_eb:
             # schedule sending a EB
             self.engine.scheduleAtAsn(
-                asn              = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod,
+                asn              = nextCreateAsn,
                 cb               = self._sendEB,
                 uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
                 intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,

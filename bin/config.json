@@ -59,7 +59,8 @@
             "phy_numChans":                                16,
 
             "motes_eui64":                                 [],
-            "user_period_eb":                              true
+            "user_period_eb":                              true,
+            "user_rpl_div":                                1
         }
     },
     "logging":                                             "all",
