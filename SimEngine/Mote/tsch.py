@@ -133,11 +133,23 @@ class Tsch(object):
                 uniqueTag=(self.mote.id, u'_action_listeningForEB_cell')
             )
         else:
+            code = 'Sync'
+            if self.mote.secjoin.getIsJoined():
+                code = 'Joined'
+                if self.mote.rpl.dodagId is not None:
+                    code = 'RPL'
+                    preferredParent = self.mote.rpl.getPreferredParent()
+                    if preferredParent is not None:
+                        cells = self.mote.sf.get_negotiated_tx_cells(preferredParent)
+                        if len(cells) != 0:
+                            code = "Cell_alloc"
+
             # log
             self.log(
                 SimEngine.SimLog.LOG_TSCH_DESYNCED,
                 {
                     "_mote_id":   self.mote.id,
+                    'code': code
                 }
             )
             # DAGRoot gets never desynchronized

@@ -23,6 +23,7 @@ import json
 import csv
 import pandas as pd
 import math
+from collections import Counter
 
 import datetime
 from SimEngine import SimLog
@@ -53,7 +54,7 @@ def init_mote():
         'upstream_num_lost': 0,
         'join_asn': None,
         'join_time_s': None,
-        'sync_asn': None,
+        'sync_asn': [],
         'rpl_asn' : None,
         'rpl_first_asn' : None,
         'rpl_parent_change_num' : None,
@@ -64,8 +65,8 @@ def init_mote():
         'upstream_pkts': {},
         'latencies': [],
         'hops': [],
-        'charge': None,
-        'charge_before_sync': None,
+        'charge': 0,
+        'charge_before_sync': 0,
         'lifetime_AA_years': None,
         'avg_current_uA': None,
         'neighbor_num': 0,
@@ -82,7 +83,9 @@ def init_mote():
         'received_dio_id_list' : [], 
         'received_dio_parent_id_list' : [],
         'received_dio_rank_list' : {},
+        'received_dio_rank_list_after_sync' : {},
         'desync_asn' : [],
+        'desync_code' : {},
         'keep_alive_asn' : []
     }
 
@@ -123,6 +126,8 @@ def kpis_all(inputfile, subfolder):
                 # (mote_id != DAGROOT_ID)
             ):
             allstats[run_id][mote_id] = init_mote()
+            if mote_id == 0:
+                allstats[run_id][mote_id]['sync_asn'].append(0)
 
         if   logline['_type'] == SimLog.LOG_TSCH_SYNCED['type']:
             # sync'ed
@@ -140,14 +145,14 @@ def kpis_all(inputfile, subfolder):
             
             networkStats[run_id]['sync_motes'][mote_id] = True
 
-            allstats[run_id][mote_id]['sync_asn']  = asn
+            allstats[run_id][mote_id]['sync_asn'].append(asn)
             allstats[run_id][mote_id]['sync_time_s'] = asn*file_settings['tsch_slotDuration']
 
         elif logline['_type'] == SimLog.LOG_TSCH_DESYNCED['type']:
 
             # shorthands
             mote_id    = logline['_mote_id']
-
+            code   = logline['code']
             # only log non-dagRoot sync times
             if mote_id == DAGROOT_ID:
                 continue
@@ -155,6 +160,19 @@ def kpis_all(inputfile, subfolder):
             # 비동기화된 모트들을 삭제함
             networkStats[run_id]['sync_motes'][mote_id] = False
             allstats[run_id][mote_id]['desync_asn'].append(asn)
+
+            # 해당 code가 desync_code 딕셔너리에 없다면 초기화
+            if code not in allstats[run_id][mote_id]['desync_code']:
+                allstats[run_id][mote_id]['desync_code'][code] = []
+
+            # 해당 code에 asn 값을 추가
+            allstats[run_id][mote_id]['desync_code'][code].append(asn)
+
+            # RPL에 참여했던 부분도 삭제함
+            allstats[run_id][mote_id]['rpl_join'] = False
+            allstats[run_id][mote_id]['rpl_asn']  = None
+            allstats[run_id][mote_id]['rpl_first_asn'] = None
+            allstats[run_id][mote_id]['received_dio_rank_list_after_sync'] = {}
         elif logline['_type'] == SimLog.LOG_TSCH_TXDONE['type']:
             # shorthands
             mote_id    = logline['_mote_id']
@@ -234,12 +252,10 @@ def kpis_all(inputfile, subfolder):
             charge += logline['sleep'] * d.CHARGE_Sleep_uC
 
             allstats[run_id][mote_id]['charge_asn'] = asn
-            allstats[run_id][mote_id]['charge']     = charge
+            allstats[run_id][mote_id]['charge']     += charge
 
             # 싱크 전 에너지 소모량
-            is_sync = False
-            if 'sync_motes' in networkStats[run_id] and mote_id in networkStats[run_id]['sync_motes'] and networkStats[run_id]['sync_motes'][mote_id]:
-                is_sync = True
+            is_sync = logline['is_sync']
 
             if not is_sync:
                 charge_before_sync =  logline['idle_listen'] * d.CHARGE_IdleListen_uC
@@ -250,7 +266,7 @@ def kpis_all(inputfile, subfolder):
                 charge_before_sync += logline['sleep'] * d.CHARGE_Sleep_uC
 
                 allstats[run_id][mote_id]['charge_asn_before_syn'] = asn
-                allstats[run_id][mote_id]['charge_before_sync']    = charge
+                allstats[run_id][mote_id]['charge_before_sync']    += charge_before_sync
 
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_TX['type']:
             if 'minimalcell_tx' not in networkStats[run_id]:
@@ -352,6 +368,7 @@ def kpis_all(inputfile, subfolder):
                 allstats[run_id][mote_id]['received_dio_parent_id_list'].append(src_id)
 
             allstats[run_id][mote_id]['received_dio_rank_list'][src_id] = rank
+            allstats[run_id][mote_id]['received_dio_rank_list_after_sync'][src_id] = rank
         # 미니멀 셀에서 전송된 패킷의 수신 결과를 저장함
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_RX['type']:
 
@@ -472,16 +489,16 @@ def kpis_all(inputfile, subfolder):
         for (mote_id, motestats) in list(per_mote_stats.items()):
             if mote_id != 0:
 
-                if (motestats['sync_asn'] is not None) and (motestats['charge_asn'] is not None):
+                if (len(motestats['sync_asn']) != 0) and (motestats['charge_asn'] is not None):
                     # avg_current, lifetime_AA
                     if (
                             (motestats['charge'] <= 0)
                             or
-                            (motestats['charge_asn'] <= motestats['sync_asn'])
+                            (motestats['charge_asn'] <= motestats['sync_asn'][-1])
                         ):
                         motestats['lifetime_AA_years'] = 'N/A'
                     else:
-                        motestats['avg_current_uA'] = motestats['charge']/float((motestats['charge_asn']-motestats['sync_asn']) * file_settings['tsch_slotDuration'])
+                        motestats['avg_current_uA'] = motestats['charge']/float((motestats['charge_asn']-motestats['sync_asn'][-1]) * file_settings['tsch_slotDuration'])
                         assert motestats['avg_current_uA'] > 0
                         motestats['lifetime_AA_years'] = (BATTERY_AA_CAPACITY_mAh*1000/float(motestats['avg_current_uA']))/(24.0*365)
                 if motestats['join_asn'] is not None:
@@ -536,8 +553,8 @@ def kpis_all(inputfile, subfolder):
             if motestats['join_asn'] is not None:
                 joining_times.append(motestats['join_asn'])
 
-            if motestats['sync_asn'] is not None:
-                sync_times.append(motestats['sync_asn'])
+            if len(motestats['sync_asn']) != 0:
+                sync_times.append(motestats['sync_asn'][-1])
 
             if motestats['rpl_asn'] is not None:
                 rpl_times.append(motestats['rpl_asn'])
@@ -1214,22 +1231,93 @@ def kpis_all(inputfile, subfolder):
 
     avgStates['rpl_received_dio_ids_num'] = calculate_stats(received_dio_id_num_avg_data)
  #=========================================================================================================================
+    # 데이터 초기화
+    desync_num_avg_data = []     # 비동기화 횟수를 구함
+    desync_asn_avg_data = []     # 비동기화 시점의 평균
+    code_counts_by_code_avg_data = []  # 각 run_id별 코드 개수를 저장
 
-    # 비동기화 횟수를 구함
-    desync_num_avg_data = []
+    # 모든 run_id에 대해 데이터를 처리
     for run_id, per_mote_stats in allstats.items():
         desync_num_sum = 0
+        desync_asn_sum = 0
         num_mote = 0
+        num_desync_mote = 0
+        # 각 코드의 개수를 저장하기 위한 딕셔너리 초기화
+        code_count = {'Sync': 0, 'Joined': 0, 'RPL': 0, 'Cell_alloc': 0} 
+
+        # 각 mote에 대한 데이터를 처리
         for mote_id, motestats in per_mote_stats.items():
             if 'desync_asn' in motestats:
                 desync_num = len(motestats['desync_asn'])
                 desync_num_sum += desync_num
                 num_mote += 1
-        desync_num_avg_data.append(desync_num_sum / num_mote)
 
+                # 비동기화 장치들의 평균 ASN을 구함
+                if desync_num != 0:
+                    desync_asn_avg = sum(motestats['desync_asn']) / len(motestats['desync_asn'])
+                    desync_asn_sum += desync_asn_avg
+                    num_desync_mote += 1
+
+                    # 'desync_code'에서 각 코드별 asn의 개수를 계산
+                    desync_codes = motestats.get('desync_code', {})
+                    for code in code_count.keys():
+                        count = len(desync_codes.get(code, []))
+                        code_count[code] += count
+
+        # run_id별 코드 개수를 저장
+        code_counts_by_code_avg_data.append(code_count)
+
+        # 비동기화 횟수의 평균을 계산
+        if num_mote != 0:
+            desync_num_avg_data.append(desync_num_sum / num_mote)
+
+        # 비동기화 장치들의 평균 ASN을 계산
+        if num_desync_mote != 0:
+            desync_asn_avg_data.append(desync_asn_sum / num_desync_mote)
+
+    # 코드별 데이터를 모아 리스트로 변환
+    sync_list = [code_counts['Sync'] for code_counts in code_counts_by_code_avg_data]
+    joined_list = [code_counts['Joined'] for code_counts in code_counts_by_code_avg_data]
+    rpl_list = [code_counts['RPL'] for code_counts in code_counts_by_code_avg_data]
+    cell_alloc_list = [code_counts['Cell_alloc'] for code_counts in code_counts_by_code_avg_data]
+
+    # 평균 및 표준편차 계산
     avgStates['desync_num'] = calculate_stats(desync_num_avg_data)
+    avgStates['desync_asn'] = calculate_stats(desync_asn_avg_data)
+    avgStates['desync_code_sync'] = calculate_stats(sync_list)
+    avgStates['desync_code_joined'] = calculate_stats(joined_list)
+    avgStates['desync_code_rpl'] = calculate_stats(rpl_list)
+    avgStates['desync_code_alloc'] = calculate_stats(cell_alloc_list)
  #=========================================================================================================================
- 
+    # 네트워크에 싱크되어 있던 시간을 측정함
+    sync_duration_s_avg_data = []
+    for run_id, per_mote_stats in allstats.items():
+        sync_duration_s = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'desync_asn' in motestats:
+                for i in range(len(motestats['desync_asn'])):
+                    sync_duration_s += (motestats['desync_asn'][i] - motestats['sync_asn'][i]) * file_settings['tsch_slotDuration']
+                
+                if len(motestats['desync_asn']) != len(motestats['sync_asn']):
+                    sync_duration_s += (file_settings['exec_numSlotframesPerRun'] * file_settings['tsch_slotframeLength'] - motestats['sync_asn'][-1]) * file_settings['tsch_slotDuration']
+                num_mote += 1
+        
+        sync_duration_s_avg_data.append(sync_duration_s / num_mote)
+    avgStates['sync_duration_s'] = calculate_stats(sync_duration_s_avg_data)
+ #=========================================================================================================================
+
+    # 네트워크의 APP 패킷 송신 개수를 구함
+    app_pkt_num_net_avg_data = []
+    for run_id, per_mote_stats in allstats.items():
+        app_pkt_num = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'upstream_num_tx' in motestats:
+                app_pkt_num += motestats['upstream_num_tx']
+        app_pkt_num_net_avg_data.append(app_pkt_num)
+
+    avgStates['app_pkt_num_net'] = calculate_stats(app_pkt_num_net_avg_data)
+ #=========================================================================================================================
     # keep alive 패킷 개수를 구함
     kp_num_avg_data = []
     for run_id, per_mote_stats in allstats.items():
@@ -1257,10 +1345,11 @@ def kpis_all(inputfile, subfolder):
         for mote_id, motestats in per_mote_stats.items():
             if 'received_dio_rank_list' in motestats:
                 rank_list = list(motestats['received_dio_rank_list'].values())
-                rank_max += max(rank_list)
-                rank_min += min(rank_list)
-                rank_mean += sum(rank_list)/ len(rank_list)
-                num_mote += 1
+                if len(rank_list) != 0:
+                    rank_max += max(rank_list)
+                    rank_min += min(rank_list)
+                    rank_mean += sum(rank_list)/ len(rank_list)
+                    num_mote += 1
 
         rpl_received_dio_rank_max_data.append(rank_max/num_mote)
         rpl_received_dio_rank_min_data.append(rank_min/num_mote)
@@ -1269,6 +1358,34 @@ def kpis_all(inputfile, subfolder):
     avgStates['rpl_received_dio_rank_max'] = calculate_stats(rpl_received_dio_rank_max_data)
     avgStates['rpl_received_dio_rank_min'] = calculate_stats(rpl_received_dio_rank_min_data)
     avgStates['rpl_received_dio_rank_mean'] = calculate_stats(rpl_received_dio_rank_mean_data)
+
+ #=========================================================================================================================
+    # 싱크 이후 DIO의 rank 및 수신 횟수에 대해 조사
+    rpl_received_dio_after_sync_rank_max_data = []
+    rpl_received_dio_after_sync_rank_min_data = []
+    rpl_received_dio_after_sync_rank_mean_data = []
+
+    for run_id, per_mote_stats in allstats.items():
+        rank_max = 0
+        rank_min = 0
+        rank_mean = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'received_dio_rank_list_after_sync' in motestats:
+                rank_list = list(motestats['received_dio_rank_list_after_sync'].values())
+                if len(rank_list) != 0:
+                    rank_max += max(rank_list)
+                    rank_min += min(rank_list)
+                    rank_mean += sum(rank_list)/ len(rank_list)
+                    num_mote += 1
+
+        rpl_received_dio_after_sync_rank_max_data.append(rank_max/num_mote)
+        rpl_received_dio_after_sync_rank_min_data.append(rank_min/num_mote)
+        rpl_received_dio_after_sync_rank_mean_data.append(rank_mean/num_mote)
+
+    avgStates['rpl_received_dio_after_sync_rank_max'] = calculate_stats(rpl_received_dio_after_sync_rank_max_data)
+    avgStates['rpl_received_dio_after_sync_rank_min'] = calculate_stats(rpl_received_dio_after_sync_rank_min_data)
+    avgStates['rpl_received_dio_after_sync_rank_mean'] = calculate_stats(rpl_received_dio_after_sync_rank_mean_data)
 
  #=========================================================================================================================
 
@@ -1290,7 +1407,7 @@ def kpis_all(inputfile, subfolder):
 
  #=========================================================================================================================
 
-    # 시뮬레이션의 평균 싱크 전 에너지 소모량을 계산함
+    # 시뮬레이션의 평균 싱크 안되어 있던 시간의 에너지 소모량을 계산함
     charge_consumed_before_sync_data = [stats['global-stats']['charge-consumed-before-sync'][0]['mean'] for run_id, stats in allstats.items()]
     avgStates['charge-consumed-before-sync']  = calculate_stats(charge_consumed_before_sync_data)
 
