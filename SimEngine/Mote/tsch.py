@@ -137,11 +137,23 @@ class Tsch(object):
             # CS로부터 EB를 수신했을 때 ASN
             self.csEbTxAsn = self.engine.getAsn()
         else:
+            code = 'Sync'
+            if self.mote.secjoin.getIsJoined():
+                code = 'Joined'
+                if self.mote.rpl.dodagId is not None:
+                    code = 'RPL'
+                    preferredParent = self.mote.rpl.getPreferredParent()
+                    if preferredParent is not None:
+                        cells = self.mote.sf.get_negotiated_tx_cells(preferredParent)
+                        if len(cells) != 0:
+                            code = "Cell_alloc"
+
             # log
             self.log(
                 SimEngine.SimLog.LOG_TSCH_DESYNCED,
                 {
                     "_mote_id":   self.mote.id,
+                    'code': code
                 }
             )
             # DAGRoot gets never desynchronized
