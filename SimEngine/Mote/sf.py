@@ -447,6 +447,20 @@ class SchedulingFunctionMSF(SchedulingFunctionBase):
             ret = []
         return ret
 
+    def get_negotiated_tx_cells(self, mac_addr):
+        slotframe = self.mote.tsch.get_slotframe(
+            self.SLOTFRAME_HANDLE_NEGOTIATED_CELLS
+        )
+        if slotframe:
+            cells = slotframe.get_cells_by_mac_addr(mac_addr)
+            ret = [
+                cell for cell in cells
+                if cell.options == [d.CELLOPTION_TX]
+            ]
+        else:
+            ret = []
+        return ret
+    
     def get_autonomous_rx_cell(self):
         slotframe = self.mote.tsch.get_slotframe(
             self.SLOTFRAME_HANDLE_AUTONOMOUS_CELLS

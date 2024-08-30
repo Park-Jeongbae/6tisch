@@ -163,6 +163,7 @@ class Radio(object):
             SimEngine.SimLog.LOG_RADIO_STATS,
             {
                 u'_mote_id'      : self.mote.id,
+                u'is_sync'       : self.mote.tsch.getIsSync(),
                 u'idle_listen'   : self.stats[u'idle_listen'],
                 u'tx_data_rx_ack': self.stats[u'tx_data_rx_ack'],
                 u'tx_data'       : self.stats[u'tx_data'],
@@ -171,6 +172,16 @@ class Radio(object):
                 u'sleep'         : self.stats[u'sleep']
             }
         )
+
+        self.stats = {
+            u'last_updated'  : 0,
+            u'idle_listen'   : 0,
+            u'tx_data_rx_ack': 0,
+            u'tx_data'       : 0,
+            u'rx_data_tx_ack': 0,
+            u'rx_data'       : 0,
+            u'sleep'         : 0,
+        }
 
         # schedule next
         self._schedule_log_stats()
