@@ -73,6 +73,7 @@ def init_mote():
         'rank' : d.RPL_INFINITE_RANK,
         'rpl_join' : False,
         'avg_hops' : None,
+        'last_hops' : None,
         'num_minimal_cells_rx' : {},
         'num_minimal_cells_tx' : {},
         'minimal_cell_utilization' : {},
@@ -518,6 +519,7 @@ def kpis_all(inputfile, subfolder):
                         motestats['latency_max_s'] = max(motestats['latencies'])
                         motestats['upstream_reliability'] = motestats['upstream_num_rx']/float(motestats['upstream_num_tx'])
                         motestats['avg_hops'] = sum(motestats['hops'])/float(len(motestats['hops']))
+                        motestats['last_hops'] = motestats['hops'][-1]
 
     # === network stats
     for (run_id, per_mote_stats) in list(allstats.items()):
@@ -1388,7 +1390,58 @@ def kpis_all(inputfile, subfolder):
     avgStates['rpl_received_dio_after_sync_rank_mean'] = calculate_stats(rpl_received_dio_after_sync_rank_mean_data)
 
  #=========================================================================================================================
+    # 노드 별 마지막 선호 부모 선택의 분산도를 확인한다
+    rpl_parent_selection_asn_distribution = []
 
+    for run_id, per_mote_stats in allstats.items():
+        rpl_parent_selection_asns = []
+        for mote_id, motestats in per_mote_stats.items():
+            if 'rpl_asn' in motestats and motestats['rpl_asn'] is not None:
+                rpl_parent_selection_asns.append(motestats['rpl_asn'])
+
+        if len(rpl_parent_selection_asns) > 0:
+            standard_deviation = np.std(rpl_parent_selection_asns, ddof=1)  # ddof=1은 표본 표준편차를 의미
+        else:
+            standard_deviation = 0
+
+        rpl_parent_selection_asn_distribution.append(standard_deviation)
+    # 각 run_id의 분산에 대한 통계를 계산
+    avgStates['rpl_parent_selection_asn_distribution'] = calculate_stats(rpl_parent_selection_asn_distribution)
+
+ #=========================================================================================================================
+    # 첫번째 싱크타임 조사
+    sync_first_asn_data = []
+
+    for run_id, per_mote_stats in allstats.items():
+        sync_first_asns = []
+        for mote_id, motestats in per_mote_stats.items():
+            if 'sync_asn' in motestats and mote_id != 0 :
+                sync_first_asns.append(motestats['sync_asn'][0])
+        # sync_first_asns에 데이터가 있는 경우에만 평균 계산
+        if len(sync_first_asns) > 0:
+            average_sync_first_asn = sum(sync_first_asns) / len(sync_first_asns)
+            sync_first_asn_data.append(average_sync_first_asn)
+
+    # 각 run_id의 첫번째 싱크 타임에 대한 통계를 계산
+    avgStates['sync_first_asn'] = calculate_stats(sync_first_asn_data)
+    
+ #=========================================================================================================================
+    # 마지막 홉 정보
+    last_hops_avg_data = []
+
+    for run_id, per_mote_stats in allstats.items():
+        last_hops = []
+        for mote_id, motestats in per_mote_stats.items():
+            if 'last_hops' in motestats and mote_id != 0:
+                last_hops.append(motestats['last_hops'])
+
+            # sync_first_asns에 데이터가 있는 경우에만 평균 계산
+            if len(last_hops) > 0:
+                last_hops_avg_data.append(sum(last_hops) / len(last_hops))
+
+    # 각 run_id의 첫번째 싱크 타임에 대한 통계를 계산
+    avgStates['last_hops'] = calculate_stats(last_hops_avg_data)
+ #=========================================================================================================================
     # 시뮬레이션의 평균 PDR을 계산함
     e2e_upstream_delivery_data = [stats['global-stats']['e2e-upstream-delivery'][0]['value'] for run_id, stats in allstats.items()]
     avgStates['e2e-upstream-delivery']  = calculate_stats(e2e_upstream_delivery_data)

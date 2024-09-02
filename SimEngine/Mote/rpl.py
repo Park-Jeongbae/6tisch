@@ -70,6 +70,7 @@ class Rpl(object):
         self._tx_stat                  = {}      # indexed by mote_id
         self.dis_mode = self._get_dis_mode()
         self.dio_set = set()
+        self.hops = None
 
     #======================== public ==========================================
 
@@ -101,6 +102,7 @@ class Rpl(object):
             # now start a new RPL instance; reset the timer as per Section 8.3 of
             # RFC 6550
             self.trickle_timer.reset()
+            self.hops = 0
         else:
             if self.settings.rpl_of:
                 # update OF with one specified in config.json
@@ -122,6 +124,7 @@ class Rpl(object):
     def stop(self):
         assert not self.mote.dagRoot
         self.dodagId = None
+        self.hops = None
         self.trickle_timer.stop()
         self.stop_dis_timer()
 
@@ -188,6 +191,7 @@ class Rpl(object):
             }
         )
         self.dodagId = None
+        self.hops = None
 
     # === DIS
 
@@ -305,6 +309,7 @@ class Rpl(object):
             u'app': {
                 u'rank':          rank,
                 u'dodagId':       self.dodagId,
+                u'hops':          self.hops,
             },
             u'net': {
                 u'srcIp':         self.mote.get_ipv6_link_local_addr(),
@@ -352,6 +357,7 @@ class Rpl(object):
                 u'src_id':    src_id,
                 u'is_preferred_parent': is_preferred_parent,
                 u'rank': packet[u'app'][u'rank'],
+                u'hops': packet[u'app'][u'hops']
             }
         )
 
@@ -375,6 +381,8 @@ class Rpl(object):
         # feed our OF with the received DIO
         self.of.update(packet)
 
+        # 아래부터 부모가 변경되었을수도 있음
+
         if self.getPreferredParent() is not None:
             # (re)join the RPL network
 
@@ -386,6 +394,10 @@ class Rpl(object):
                 # preferred parent, or Rank SHOULD be considered consistent with respect to the Trickle timer.                
                 if rank == self.get_rank() and preferredParent == self.getPreferredParent():
                     self.trickle_timer.increment_counter()
+
+        # 패킷 송신자와 선호부모가 같을 경우
+        if self.dodagId is not None and packet['mac']['srcMac'] == self.getPreferredParent():
+            self.hops = packet[u'app'][u'hops'] + 1
 
     def join_dodag(self, dodagId=None):
         if dodagId is None:
@@ -486,6 +498,7 @@ class Rpl(object):
             u'type':                d.PKT_TYPE_DAO,
             u'app': {
                 u'parent_addr':     parent_ipv6_addr,
+                u'hops':            self.hops
             },
             u'net': {
                 u'srcIp':           self.mote.get_ipv6_global_addr(),
