@@ -53,7 +53,7 @@ LOG_SECJOIN_FAILED                = {u'type': u'secjoin.failed',            u'ke
 
 # === rpl
 LOG_RPL_DIO_TX                    = {u'type': u'rpl.dio.tx',                u'keys': [u'_mote_id',u'packet']}
-LOG_RPL_DIO_RX                    = {u'type': u'rpl.dio.rx',                u'keys': [u'_mote_id',u'packet',u'src_id', u'is_preferred_parent', u'rank']}
+LOG_RPL_DIO_RX                    = {u'type': u'rpl.dio.rx',                u'keys': [u'_mote_id',u'packet',u'src_id', u'is_preferred_parent', u'rank',u'hops']}
 LOG_RPL_DAO_TX                    = {u'type': u'rpl.dao.tx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DAO_RX                    = {u'type': u'rpl.dao.rx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DIS_TX                    = {u'type': u'rpl.dis.tx',                u'keys': [u'_mote_id',u'packet']}
