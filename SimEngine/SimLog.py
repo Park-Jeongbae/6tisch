@@ -58,7 +58,7 @@ LOG_RPL_DAO_TX                    = {u'type': u'rpl.dao.tx',                u'ke
 LOG_RPL_DAO_RX                    = {u'type': u'rpl.dao.rx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DIS_TX                    = {u'type': u'rpl.dis.tx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DIS_RX                    = {u'type': u'rpl.dis.rx',                u'keys': [u'_mote_id',u'packet']}
-LOG_RPL_CHURN                     = {u'type': u'rpl.churn',                 u'keys': [u'_mote_id',u'preferredParent', u'asn']}
+LOG_RPL_CHURN                     = {u'type': u'rpl.churn',                 u'keys': [u'_mote_id',u'preferredParent', u'asn', u'parent_dio_rank']}
 LOG_RPL_LOCAL_REPAIR              = {u'type': u'rpl.local_repair',          u'keys': [u'_mote_id']}
 
 # === 6LoWPAN

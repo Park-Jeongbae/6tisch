@@ -70,7 +70,7 @@ def init_mote():
         'lifetime_AA_years': None,
         'avg_current_uA': None,
         'neighbor_num': 0,
-        'rank' : d.RPL_INFINITE_RANK,
+        'rank' : [],
         'rpl_join' : False,
         'avg_hops' : None,
         'last_hops' : None,
@@ -331,6 +331,8 @@ def kpis_all(inputfile, subfolder):
 
             mote_id = logline['_mote_id']
             preferredParent = logline['preferredParent']
+            # 부모 변경 시 받은 DIO Rank인데 어디써야할지 모르겠음
+            rank = logline['parent_dio_rank']
 
             if mote_id == DAGROOT_ID:
                 continue
@@ -455,7 +457,7 @@ def kpis_all(inputfile, subfolder):
 
             allstats[run_id][mote_id]['neighbor_num'] = neighbor_num
         
-        # 장치별 RPL Rank 값을 저장함
+        # 장치별 자신의 RPL Rank 값을 저장함
         elif logline['_type'] == SimLog.LOG_USER_RPL_RANK['type']:
             
             mote_id = logline['_mote_id']
@@ -464,7 +466,7 @@ def kpis_all(inputfile, subfolder):
             if mote_id == DAGROOT_ID or rank is None:
                 continue
 
-            allstats[run_id][mote_id]['rank'] = rank
+            allstats[run_id][mote_id]['rank'].append(rank)
         elif logline['_type'] == SimLog.LOG_USER_MINIMAL_CELL_CONGESTION['type']:
  
             mote_id = logline['_mote_id']
@@ -1169,7 +1171,7 @@ def kpis_all(inputfile, subfolder):
             if 'rpl_join' in motestats:
                 if motestats['rpl_join']:
                     rpl_motes_num += 1
-                    rpl_rank.append(motestats['rank'])
+                    rpl_rank.append(motestats['rank'][-1])
                     rpl_parent_change_num.append(motestats['rpl_parent_change_num'])
 
         rpl_motes_num_data.append(rpl_motes_num)
@@ -1366,11 +1368,13 @@ def kpis_all(inputfile, subfolder):
     rpl_received_dio_after_sync_rank_max_data = []
     rpl_received_dio_after_sync_rank_min_data = []
     rpl_received_dio_after_sync_rank_mean_data = []
+    rpl_received_dio_after_sync_ids_data = []
 
     for run_id, per_mote_stats in allstats.items():
         rank_max = 0
         rank_min = 0
         rank_mean = 0
+        num_of_motes = 0
         num_mote = 0
         for mote_id, motestats in per_mote_stats.items():
             if 'received_dio_rank_list_after_sync' in motestats:
@@ -1379,18 +1383,21 @@ def kpis_all(inputfile, subfolder):
                     rank_max += max(rank_list)
                     rank_min += min(rank_list)
                     rank_mean += sum(rank_list)/ len(rank_list)
+                    num_of_motes += len(rank_list)
                     num_mote += 1
 
         rpl_received_dio_after_sync_rank_max_data.append(rank_max/num_mote)
         rpl_received_dio_after_sync_rank_min_data.append(rank_min/num_mote)
         rpl_received_dio_after_sync_rank_mean_data.append(rank_mean/num_mote)
+        rpl_received_dio_after_sync_ids_data.append(num_of_motes/num_mote)
 
     avgStates['rpl_received_dio_after_sync_rank_max'] = calculate_stats(rpl_received_dio_after_sync_rank_max_data)
     avgStates['rpl_received_dio_after_sync_rank_min'] = calculate_stats(rpl_received_dio_after_sync_rank_min_data)
     avgStates['rpl_received_dio_after_sync_rank_mean'] = calculate_stats(rpl_received_dio_after_sync_rank_mean_data)
+    avgStates['rpl_received_dio_after_sync_ids'] = calculate_stats(rpl_received_dio_after_sync_ids_data)
 
  #=========================================================================================================================
-    # 노드 별 마지막 선호 부모 선택의 분산도를 확인한다
+    # 노드 별 마지막 선호 부모 선택 ASN의 분산도를 확인한다
     rpl_parent_selection_asn_distribution = []
 
     for run_id, per_mote_stats in allstats.items():
@@ -1407,6 +1414,25 @@ def kpis_all(inputfile, subfolder):
         rpl_parent_selection_asn_distribution.append(standard_deviation)
     # 각 run_id의 분산에 대한 통계를 계산
     avgStates['rpl_parent_selection_asn_distribution'] = calculate_stats(rpl_parent_selection_asn_distribution)
+
+ #=========================================================================================================================
+    # 노드 별 첫번째 선호 부모 선택 ASN의 분산도를 확인한다
+    rpl_parent_selection_first_asn_distribution = []
+
+    for run_id, per_mote_stats in allstats.items():
+        rpl_parent_selection_first_asns = []
+        for mote_id, motestats in per_mote_stats.items():
+            if 'rpl_first_asn' in motestats and motestats['rpl_first_asn'] is not None:
+                rpl_parent_selection_first_asns.append(motestats['rpl_first_asn'])
+
+        if len(rpl_parent_selection_first_asns) > 0:
+            standard_deviation = np.std(rpl_parent_selection_first_asns, ddof=1)  # ddof=1은 표본 표준편차를 의미
+        else:
+            standard_deviation = 0
+
+        rpl_parent_selection_first_asn_distribution.append(standard_deviation)
+    # 각 run_id의 분산에 대한 통계를 계산
+    avgStates['rpl_parent_selection_first_asn_distribution'] = calculate_stats(rpl_parent_selection_first_asn_distribution)
 
  #=========================================================================================================================
     # 첫번째 싱크타임 조사
