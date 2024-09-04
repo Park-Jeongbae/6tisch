@@ -135,7 +135,6 @@ class Rpl(object):
                 "rank":            d.RPL_INFINITE_RANK,
             }
         )
-        print(self.mote.id, "stop!!")
 
     def indicate_tx(self, cell, dstMac, isACKed):
         self.of.update_etx(cell, dstMac, isACKed)
@@ -851,28 +850,28 @@ class RplOF0(RplOFBase):
                 return rank
 
     def _update_preferred_parent(self):
-        if (
-                (self.preferred_parent is not None)
-                and
-                (self.preferred_parent[u'advertised_rank'] is not None)
-                and
-                (self.rank is not None)
-                and
-                (
-                    (self.preferred_parent[u'advertised_rank'] - self.rank) <
-                    d.RPL_PARENT_SWITCH_RANK_THRESHOLD
-                )
-                and
-                (
-                    self.preferred_parent[u'rank_increase'] <
-                    self.PARENT_SWITCH_RANK_INCREASE_THRESHOLD
-                )
-            ):
-            # stay with the current parent. the link to the parent is
-            # good. but, if the parent rank is higher than us and the
-            # difference is more than d.RPL_PARENT_SWITCH_RANK_THRESHOLD, we dump
-            # the parent. otherwise, we may create a routing loop.
-            return
+        # if (
+        #         (self.preferred_parent is not None)
+        #         and
+        #         (self.preferred_parent[u'advertised_rank'] is not None)
+        #         and
+        #         (self.rank is not None)
+        #         and
+        #         (
+        #             (self.preferred_parent[u'advertised_rank'] - self.rank) <
+        #             d.RPL_PARENT_SWITCH_RANK_THRESHOLD
+        #         )
+        #         and
+        #         (
+        #             self.preferred_parent[u'rank_increase'] <
+        #             self.PARENT_SWITCH_RANK_INCREASE_THRESHOLD
+        #         )
+        #     ):
+        #     # stay with the current parent. the link to the parent is
+        #     # good. but, if the parent rank is higher than us and the
+        #     # difference is more than d.RPL_PARENT_SWITCH_RANK_THRESHOLD, we dump
+        #     # the parent. otherwise, we may create a routing loop.
+        #     return
 
         try:
             candidate = min(self.parents, key=self._calculate_rank)

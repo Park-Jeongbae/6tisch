@@ -83,6 +83,7 @@ class Tsch(object):
         # pending bit
         self.pending_bit_enabled            = False
         self.args_for_next_pending_bit_task = None
+        self.first_eb                       = True
 
         self.csEbTxAsn = None
         self.nextEbTxAsn = None
@@ -171,6 +172,7 @@ class Tsch(object):
             self._stop_sendEB_timer()
             self.txQueue = []
             self.received_eb_list = {}
+            self.first_eb = True
             # we may have this timer task
             self.engine.removeFutureEvent(
                 uniqueTag=(self.mote.id, u'tsch', u'wait_secjoin')
@@ -1493,6 +1495,11 @@ class Tsch(object):
 
     def _start_sendEB_timer(self):
         asnNow = self.engine.getAsn()
+        
+        delay = 0
+        if self.first_eb:
+            delay = self.settings.tsch_slotframeLength * self.settings.user_eb_delay_sf
+            self.first_eb = False
 
         nextCreateAsn = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod
         nextEbTxAsn = asnNow + self.settings.tsch_slotframeLength * (self.settings.tsch_ebPeriod + 1)
@@ -1512,7 +1519,7 @@ class Tsch(object):
         if self.settings.user_period_eb:
             # schedule sending a EB
             self.engine.scheduleAtAsn(
-                asn              = nextCreateAsn,
+                asn              = nextCreateAsn + delay,
                 cb               = self._sendEB,
                 uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
                 intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
@@ -1520,7 +1527,7 @@ class Tsch(object):
         else:
             # schedule sending a EB
             self.engine.scheduleAtAsn(
-                asn              = asnNow + self.settings.tsch_slotframeLength,
+                asn              = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod + delay,
                 cb               = self._sendEB,
                 uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
                 intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,

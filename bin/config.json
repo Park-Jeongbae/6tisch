@@ -24,7 +24,7 @@
 
             "rpl_of":                                      "OF0",
             "rpl_daoPeriod":                               60,
-            "rpl_extensions":                              ["dis_broadcast"],
+            "rpl_extensions":                              ["disabled"],
 
             "fragmentation":                               "FragmentForwarding",
             "sixlowpan_reassembly_buffers_num":            1,
@@ -60,7 +60,8 @@
 
             "motes_eui64":                                 [],
             "user_period_eb":                              true,
-            "user_rpl_div":                                1
+            "user_rpl_div":                                1,
+            "user_eb_delay_sf":                            0
         }
     },
     "logging":                                             "all",

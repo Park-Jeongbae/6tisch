@@ -59,6 +59,7 @@ def init_mote():
         'rpl_first_asn' : None,
         'rpl_parent_change_num' : None,
         'rpl_time_s' : None,
+        'rpl_parent_id' : None,
         'sync_time_s': None,
         'charge_asn': None,
         'charge_asn_before_sync': None,
@@ -174,6 +175,8 @@ def kpis_all(inputfile, subfolder):
             allstats[run_id][mote_id]['rpl_asn']  = None
             allstats[run_id][mote_id]['rpl_first_asn'] = None
             allstats[run_id][mote_id]['received_dio_rank_list_after_sync'] = {}
+            allstats[run_id][mote_id]['rpl_parent_id'] = None
+
         elif logline['_type'] == SimLog.LOG_TSCH_TXDONE['type']:
             # shorthands
             mote_id    = logline['_mote_id']
@@ -334,6 +337,13 @@ def kpis_all(inputfile, subfolder):
             # 부모 변경 시 받은 DIO Rank인데 어디써야할지 모르겠음
             rank = logline['parent_dio_rank']
 
+            preferred_parent_id = None
+            if preferredParent is not None:
+                preferred_parent_mac_addr = preferredParent
+                cleaned_hex_string = preferred_parent_mac_addr.replace('-', '')
+                last_four_hex = cleaned_hex_string[-4:]
+                preferred_parent_id = int(last_four_hex, 16)
+
             if mote_id == DAGROOT_ID:
                 continue
             
@@ -342,6 +352,7 @@ def kpis_all(inputfile, subfolder):
                 allstats[run_id][mote_id]['rpl_join'] = False
                 allstats[run_id][mote_id]['rpl_asn']  = None
                 allstats[run_id][mote_id]['rpl_first_asn'] = None
+                allstats[run_id][mote_id]['rpl_parent_id'] = None
             else :
                 # 첫번째 부모 선택 시간을 따로 저장한다.
                 if allstats[run_id][mote_id]['rpl_asn'] is None:
@@ -355,6 +366,8 @@ def kpis_all(inputfile, subfolder):
                 allstats[run_id][mote_id]['rpl_join'] = True
                 allstats[run_id][mote_id]['rpl_asn']  = asn
                 allstats[run_id][mote_id]['rpl_time_s'] = asn*file_settings['tsch_slotDuration']
+                allstats[run_id][mote_id]['rpl_parent_id'] = preferred_parent_id
+
         # 모든 DIO 수신 내역에 대해 저장함
         elif logline['_type'] == SimLog.LOG_RPL_DIO_RX['type']:
             
@@ -1369,20 +1382,23 @@ def kpis_all(inputfile, subfolder):
     rpl_received_dio_after_sync_rank_min_data = []
     rpl_received_dio_after_sync_rank_mean_data = []
     rpl_received_dio_after_sync_ids_data = []
+    rpl_received_dio_after_sync_parent_dio_rank_data = []
 
     for run_id, per_mote_stats in allstats.items():
         rank_max = 0
         rank_min = 0
         rank_mean = 0
+        parent_rank = 0
         num_of_motes = 0
         num_mote = 0
         for mote_id, motestats in per_mote_stats.items():
-            if 'received_dio_rank_list_after_sync' in motestats:
+            if 'received_dio_rank_list_after_sync' in motestats and mote_id != 0:
                 rank_list = list(motestats['received_dio_rank_list_after_sync'].values())
                 if len(rank_list) != 0:
                     rank_max += max(rank_list)
                     rank_min += min(rank_list)
                     rank_mean += sum(rank_list)/ len(rank_list)
+                    parent_rank += motestats['received_dio_rank_list_after_sync'][motestats['rpl_parent_id']]
                     num_of_motes += len(rank_list)
                     num_mote += 1
 
@@ -1390,11 +1406,13 @@ def kpis_all(inputfile, subfolder):
         rpl_received_dio_after_sync_rank_min_data.append(rank_min/num_mote)
         rpl_received_dio_after_sync_rank_mean_data.append(rank_mean/num_mote)
         rpl_received_dio_after_sync_ids_data.append(num_of_motes/num_mote)
+        rpl_received_dio_after_sync_parent_dio_rank_data.append(parent_rank/num_mote)
 
     avgStates['rpl_received_dio_after_sync_rank_max'] = calculate_stats(rpl_received_dio_after_sync_rank_max_data)
     avgStates['rpl_received_dio_after_sync_rank_min'] = calculate_stats(rpl_received_dio_after_sync_rank_min_data)
     avgStates['rpl_received_dio_after_sync_rank_mean'] = calculate_stats(rpl_received_dio_after_sync_rank_mean_data)
     avgStates['rpl_received_dio_after_sync_ids'] = calculate_stats(rpl_received_dio_after_sync_ids_data)
+    avgStates['rpl_received_dio_after_sync_parent_dio_rank'] = calculate_stats(rpl_received_dio_after_sync_parent_dio_rank_data)
 
  #=========================================================================================================================
     # 노드 별 마지막 선호 부모 선택 ASN의 분산도를 확인한다
@@ -1441,7 +1459,7 @@ def kpis_all(inputfile, subfolder):
     for run_id, per_mote_stats in allstats.items():
         sync_first_asns = []
         for mote_id, motestats in per_mote_stats.items():
-            if 'sync_asn' in motestats and mote_id != 0 :
+            if 'sync_asn' in motestats and mote_id != 0 and len(motestats['sync_asn']) != 0:
                 sync_first_asns.append(motestats['sync_asn'][0])
         # sync_first_asns에 데이터가 있는 경우에만 평균 계산
         if len(sync_first_asns) > 0:
@@ -1458,7 +1476,7 @@ def kpis_all(inputfile, subfolder):
     for run_id, per_mote_stats in allstats.items():
         last_hops = []
         for mote_id, motestats in per_mote_stats.items():
-            if 'last_hops' in motestats and mote_id != 0:
+            if 'last_hops' in motestats and mote_id != 0 and motestats['last_hops'] is not None:
                 last_hops.append(motestats['last_hops'])
 
             # sync_first_asns에 데이터가 있는 경우에만 평균 계산
