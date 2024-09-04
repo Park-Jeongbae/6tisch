@@ -84,6 +84,7 @@ class Tsch(object):
         self.pending_bit_enabled            = False
         self.args_for_next_pending_bit_task = None
         self.parentEbAsn = None
+        self.first_eb                       = True
 
         assert self.settings.phy_numChans <= len(d.TSCH_HOPPING_SEQUENCE)
         self.hopping_sequence = (
@@ -168,6 +169,7 @@ class Tsch(object):
             self.txQueue = []
             self.received_eb_list = {}
             self.parentEbAsn = None
+            self.first_eb = True
             # we may have this timer task
             self.engine.removeFutureEvent(
                 uniqueTag=(self.mote.id, u'tsch', u'wait_secjoin')
@@ -1537,11 +1539,16 @@ class Tsch(object):
 
     def _start_sendEB_timer(self):
         asnNow = self.engine.getAsn()
+        
+        delay = 0
+        if self.first_eb:
+            delay = self.settings.tsch_slotframeLength * self.settings.user_eb_delay_sf
+            self.first_eb = False
 
         if self.settings.user_period_eb:
             # schedule sending a EB
             self.engine.scheduleAtAsn(
-                asn              = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod,
+                asn              = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod + delay,
                 cb               = self._sendEB,
                 uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
                 intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
@@ -1549,7 +1556,7 @@ class Tsch(object):
         else:
             # schedule sending a EB
             self.engine.scheduleAtAsn(
-                asn              = asnNow + self.settings.tsch_slotframeLength,
+                asn              = asnNow + self.settings.tsch_slotframeLength * self.settings.tsch_ebPeriod + delay,
                 cb               = self._sendEB,
                 uniqueTag        = (self.mote.id, u'tsch.sendEB_timer'),
                 intraSlotOrder   = d.INTRASLOTORDER_STACKTASKS,
