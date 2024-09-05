@@ -299,6 +299,7 @@ class Rpl(object):
             {
                 u'_mote_id':  self.mote.id,
                 u'packet':    dio,
+                u'hops':      self.hops,
             }
         )
 
