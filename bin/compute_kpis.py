@@ -88,7 +88,8 @@ def init_mote():
         'received_dio_rank_list_after_sync' : {},
         'desync_asn' : [],
         'desync_code' : {},
-        'keep_alive_asn' : []
+        'keep_alive_asn' : [],
+        'dio_tx_num' : {}
     }
 
 # =========================== KPIs ============================================
@@ -385,6 +386,22 @@ def kpis_all(inputfile, subfolder):
 
             allstats[run_id][mote_id]['received_dio_rank_list'][src_id] = rank
             allstats[run_id][mote_id]['received_dio_rank_list_after_sync'][src_id] = rank
+        # 미니멀 셀에서 전송된 패킷의 송신 결과를 저장함
+        elif logline['_type'] == SimLog.LOG_RPL_DIO_TX['type']:
+            
+            mote_id = logline['_mote_id']
+            hops = logline['hops']
+
+            minitues = asn * file_settings['tsch_slotDuration'] // 60
+
+            if minitues not in allstats[run_id][mote_id]['dio_tx_num']:
+                allstats[run_id][mote_id]['dio_tx_num'][minitues] = {}
+
+            if hops not in allstats[run_id][mote_id]['dio_tx_num'][minitues]:
+                allstats[run_id][mote_id]['dio_tx_num'][minitues][hops] = 0
+
+            allstats[run_id][mote_id]['dio_tx_num'][minitues][hops] += 1
+
         # 미니멀 셀에서 전송된 패킷의 수신 결과를 저장함
         elif logline['_type'] == SimLog.LOG_USER_MINIMALCELL_RX['type']:
 
@@ -1248,6 +1265,73 @@ def kpis_all(inputfile, subfolder):
 
     avgStates['rpl_received_dio_ids_num'] = calculate_stats(received_dio_id_num_avg_data)
  #=========================================================================================================================
+
+    # 결과를 저장할 딕셔너리 초기화
+    results = {}
+    packet_sums = {}
+    minute_counts = {}  # 각 분의 데이터 개수를 저장할 딕셔너리
+
+    # 각 run_id와 mote_id에 대해 데이터를 수집
+    for run_id, per_mote_stats in sorted(allstats.items(), key=lambda x: str(x[0])):  # run_id를 문자열로 변환 후 정렬
+        packet_sums[run_id] = {}
+        
+        for mote_id, motestats in sorted(per_mote_stats.items(), key=lambda x: str(x[0])):  # mote_id를 문자열로 변환 후 정렬
+            if 'dio_tx_num' in motestats:
+                dio_tx_data = motestats['dio_tx_num']
+                
+                for minute, hops_data in sorted(dio_tx_data.items()):  # minute을 정렬
+                    if minute not in packet_sums[run_id]:
+                        packet_sums[run_id][minute] = {}
+                    
+                    for hops, count in sorted(hops_data.items()):  # hops를 정렬
+                        if hops not in packet_sums[run_id][minute]:
+                            packet_sums[run_id][minute][hops] = 0
+                        
+                        packet_sums[run_id][minute][hops] += count
+
+        # 각 run_id에 대한 데이터프레임 생성 및 저장
+        df_run = pd.DataFrame.from_dict(packet_sums[run_id], orient='index').fillna(0).sort_index()
+        df_run = df_run[sorted(df_run.columns)]  # 열(hops)을 오름차순으로 정렬
+        results[run_id] = df_run
+
+        # 각 분의 데이터를 가진 run_id 수를 계산
+        for minute in df_run.index:
+            if minute not in minute_counts:
+                minute_counts[minute] = 0
+            if df_run.loc[minute].sum() > 0:  # 해당 분의 데이터가 있는 경우만 카운트 증가
+                minute_counts[minute] += 1
+
+    # 모든 run_id의 평균 계산
+    average_packets = {}
+
+    for run_id, df in results.items():
+        for minute in df.index:
+            if minute not in average_packets:
+                average_packets[minute] = {}
+            for hops in df.columns:
+                if hops not in average_packets[minute]:
+                    average_packets[minute][hops] = 0
+                average_packets[minute][hops] += df.at[minute, hops]
+
+    # 평균 계산 (각 분에 대해 데이터가 있는 run_id의 개수로 나누기)
+    df_average_packets = pd.DataFrame.from_dict(average_packets, orient='index').sort_index()
+    df_average_packets = df_average_packets.div(minute_counts.values(), axis=0).fillna(0)
+    df_average_packets = df_average_packets[sorted(df_average_packets.columns)]  # 열(hops)을 오름차순으로 정렬
+
+    # 엑셀 파일로 저장
+    with pd.ExcelWriter(subfolder + "\\" + 'dio_tx_summary.xlsx') as writer:
+        # 각 run_id 별 시트에 데이터프레임 저장
+        for run_id, df in sorted(results.items(), key=lambda x: str(x[0])):  # run_id를 문자열로 변환 후 정렬
+            # run_id를 문자열로 변환하여 유효한 시트 이름 생성
+            sheet_name = str(run_id) if isinstance(run_id, (int, float)) else run_id
+            if not sheet_name.strip():
+                sheet_name = 'default_name'
+            df.to_excel(writer, sheet_name=sheet_name)
+        
+        # 모든 run_id의 평균을 마지막 시트에 저장
+        df_average_packets.to_excel(writer, sheet_name='Average')
+
+ #========================================================================================================================
     # 데이터 초기화
     desync_num_avg_data = []     # 비동기화 횟수를 구함
     desync_asn_avg_data = []     # 비동기화 시점의 평균
