@@ -70,6 +70,7 @@ class Rpl(object):
         self._tx_stat                  = {}      # indexed by mote_id
         self.dis_mode = self._get_dis_mode()
         self.dio_set = set()
+        self.hops = None
 
     #======================== public ==========================================
 
@@ -101,6 +102,7 @@ class Rpl(object):
             # now start a new RPL instance; reset the timer as per Section 8.3 of
             # RFC 6550
             self.trickle_timer.reset()
+            self.hops = 0
         else:
             if self.settings.rpl_of:
                 # update OF with one specified in config.json
@@ -122,20 +124,30 @@ class Rpl(object):
     def stop(self):
         assert not self.mote.dagRoot
         self.dodagId = None
+        self.hops = None
         self.trickle_timer.stop()
         self.stop_dis_timer()
+        self.of_rank = d.RPL_INFINITE_RANK
+        self.log(
+            SimEngine.SimLog.LOG_USER_RPL_RANK,
+            {
+                "_mote_id":        self.mote.id,
+                "rank":            d.RPL_INFINITE_RANK,
+            }
+        )
 
     def indicate_tx(self, cell, dstMac, isACKed):
         self.of.update_etx(cell, dstMac, isACKed)
 
-    def indicate_preferred_parent_change(self, old_preferred, new_preferred):
-        # log
+    def indicate_preferred_parent_change(self, old_preferred, new_preferred, parent_dio_rank):
+        # 부모 변경 시, 관련 정보를 남긴다
         self.log(
             SimEngine.SimLog.LOG_RPL_CHURN,
             {
                 "_mote_id":        self.mote.id,
                 "preferredParent": new_preferred,
-                'asn':             self.engine.getAsn()
+                "asn":             self.engine.getAsn(),
+                "parent_dio_rank": parent_dio_rank
             }
         )
 
@@ -188,6 +200,7 @@ class Rpl(object):
             }
         )
         self.dodagId = None
+        self.hops = None
 
     # === DIS
 
@@ -282,6 +295,7 @@ class Rpl(object):
             {
                 u'_mote_id':  self.mote.id,
                 u'packet':    dio,
+                u'hops':      self.hops,
             }
         )
 
@@ -305,6 +319,7 @@ class Rpl(object):
             u'app': {
                 u'rank':          rank,
                 u'dodagId':       self.dodagId,
+                u'hops':          self.hops,
             },
             u'net': {
                 u'srcIp':         self.mote.get_ipv6_link_local_addr(),
@@ -352,6 +367,7 @@ class Rpl(object):
                 u'src_id':    src_id,
                 u'is_preferred_parent': is_preferred_parent,
                 u'rank': packet[u'app'][u'rank'],
+                u'hops': packet[u'app'][u'hops']
             }
         )
 
@@ -375,6 +391,8 @@ class Rpl(object):
         # feed our OF with the received DIO
         self.of.update(packet)
 
+        # 아래부터 부모가 변경되었을수도 있음
+
         if self.getPreferredParent() is not None:
             # (re)join the RPL network
 
@@ -386,6 +404,27 @@ class Rpl(object):
                 # preferred parent, or Rank SHOULD be considered consistent with respect to the Trickle timer.                
                 if rank == self.get_rank() and preferredParent == self.getPreferredParent():
                     self.trickle_timer.increment_counter()
+
+        # 패킷 송신자와 선호부모가 같을 경우
+        if self.dodagId is not None and packet['mac']['srcMac'] == self.getPreferredParent():
+            self.hops = packet[u'app'][u'hops'] + 1
+
+        # 부모로부터 DIO를 수신했을 경우 자신의 rank를 업데이트하고 로그를 남김
+        if self.dodagId is not None and self.of.preferred_parent['mac_addr'] == self.getPreferredParent():
+            self.of.rank = self.of._calculate_rank(self.of.preferred_parent)
+
+        # 부모가 변경되었거나, rank 값 변경 시 로그를 남김
+        if  self.dodagId is not None and\
+            preferredParent != self.getPreferredParent() or \
+            rank != self.of.rank:
+
+            self.log(
+                SimEngine.SimLog.LOG_USER_RPL_RANK,
+                {
+                    "_mote_id":        self.mote.id,
+                    "rank":            self.get_rank(),
+                }
+            )
 
     def join_dodag(self, dodagId=None):
         if dodagId is None:
@@ -486,6 +525,7 @@ class Rpl(object):
             u'type':                d.PKT_TYPE_DAO,
             u'app': {
                 u'parent_addr':     parent_ipv6_addr,
+                u'hops':            self.hops
             },
             u'net': {
                 u'srcIp':           self.mote.get_ipv6_global_addr(),
@@ -569,7 +609,8 @@ class RplOFBase(object):
         self.preferred_parent = None
         self.rpl.indicate_preferred_parent_change(
             old_preferred = old_parent_mac_addr,
-            new_preferred = None
+            new_preferred = None,
+            parent_dio_rank = None
         )
 
     def update(self, dio):
@@ -754,6 +795,7 @@ class RplOF0(RplOFBase):
         neighbor[u'advertised_rank'] = new_advertised_rank
 
     def _update_neighbor_rank_increase(self, neighbor):
+        rank = self.rank
         if neighbor[u'etx'] > self.UPPER_LIMIT_OF_ACCEPTABLE_ETX:
             step_of_rank = None
         else:
@@ -769,9 +811,13 @@ class RplOF0(RplOFBase):
             # ETX is 3, which is defined in Section 5.1.1 of RFC 8180
             assert step_of_rank <= self.MAXIMUM_STEP_OF_RANK
             neighbor[u'rank_increase'] = step_of_rank * d.RPL_MINHOPRANKINCREASE
-
-        if neighbor == self.preferred_parent:
+        
+        # 선호부모의 rank increase가 변경되었을 때 나의 rank를 업데이트 한다.
+        if self.rpl.dodagId is not None and neighbor == self.preferred_parent:
             self.rank = self._calculate_rank(self.preferred_parent)
+
+        # 선호부모의 rank increase가 변경되었을 때만 로그를 남긴다.
+        if neighbor == self.preferred_parent and self.rank != rank:
             self.rpl.log(
                 SimEngine.SimLog.LOG_USER_RPL_RANK,
                 {
@@ -801,28 +847,28 @@ class RplOF0(RplOFBase):
                 return rank
 
     def _update_preferred_parent(self):
-        if (
-                (self.preferred_parent is not None)
-                and
-                (self.preferred_parent[u'advertised_rank'] is not None)
-                and
-                (self.rank is not None)
-                and
-                (
-                    (self.preferred_parent[u'advertised_rank'] - self.rank) <
-                    d.RPL_PARENT_SWITCH_RANK_THRESHOLD
-                )
-                and
-                (
-                    self.preferred_parent[u'rank_increase'] <
-                    self.PARENT_SWITCH_RANK_INCREASE_THRESHOLD
-                )
-            ):
-            # stay with the current parent. the link to the parent is
-            # good. but, if the parent rank is higher than us and the
-            # difference is more than d.RPL_PARENT_SWITCH_RANK_THRESHOLD, we dump
-            # the parent. otherwise, we may create a routing loop.
-            return
+        # if (
+        #         (self.preferred_parent is not None)
+        #         and
+        #         (self.preferred_parent[u'advertised_rank'] is not None)
+        #         and
+        #         (self.rank is not None)
+        #         and
+        #         (
+        #             (self.preferred_parent[u'advertised_rank'] - self.rank) <
+        #             d.RPL_PARENT_SWITCH_RANK_THRESHOLD
+        #         )
+        #         and
+        #         (
+        #             self.preferred_parent[u'rank_increase'] <
+        #             self.PARENT_SWITCH_RANK_INCREASE_THRESHOLD
+        #         )
+        #     ):
+        #     # stay with the current parent. the link to the parent is
+        #     # good. but, if the parent rank is higher than us and the
+        #     # difference is more than d.RPL_PARENT_SWITCH_RANK_THRESHOLD, we dump
+        #     # the parent. otherwise, we may create a routing loop.
+        #     return
 
         try:
             candidate = min(self.parents, key=self._calculate_rank)
@@ -838,13 +884,6 @@ class RplOF0(RplOFBase):
         elif self.rank is None:
             new_parent = candidate
             self.rank = new_rank
-            self.rpl.log(
-                SimEngine.SimLog.LOG_USER_RPL_RANK,
-                {
-                    "_mote_id":        self.rpl.mote.id,
-                    "rank":            self.rank,
-                }
-            )
         else:
             # (new_rank is not None) and (self.rank is None)
             rank_difference = self.rank - new_rank
@@ -886,9 +925,11 @@ class RplOF0(RplOFBase):
             else:
                 new_parent_mac_addr = self.preferred_parent[u'mac_addr']
 
+            # 선호 부모 변경 시, 수신한  rank를  로그로 남긴다.
             self.rpl.indicate_preferred_parent_change(
                 old_preferred = old_parent_mac_addr,
-                new_preferred = new_parent_mac_addr
+                new_preferred = new_parent_mac_addr,
+                parent_dio_rank = self.preferred_parent[u'advertised_rank']
             )
 
             # reset Trickle Timer
@@ -1097,7 +1138,8 @@ class RplOFBestLinkPDR(RplOF0):
                 self.rank = self._calculate_rank(new_preferred_parent)
                 self.rpl.indicate_preferred_parent_change(
                     old_preferred_parent[u'mac_addr'],
-                    new_preferred_parent[u'mac_addr']
+                    new_preferred_parent[u'mac_addr'],
+                    parent_dio_rank = self.preferred_parent[u'advertised_rank']
                 )
 
                 if (

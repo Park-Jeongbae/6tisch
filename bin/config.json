@@ -9,8 +9,8 @@
             "exec_numMotes":                               [10]
         },
         "regular": {
-            "exec_numSlotframesPerRun":                    10000,
-            "exec_minutesPerRun":                          null,
+            "exec_numSlotframesPerRun":                    null,
+            "exec_minutesPerRun":                          180,
             "exec_randomSeed":                             "random",
 
             "secjoin_enabled":                             true,
@@ -24,7 +24,7 @@
 
             "rpl_of":                                      "OF0",
             "rpl_daoPeriod":                               60,
-            "rpl_extensions":                              ["dis_broadcast"],
+            "rpl_extensions":                              ["disabled"],
 
             "fragmentation":                               "FragmentForwarding",
             "sixlowpan_reassembly_buffers_num":            1,
@@ -60,9 +60,10 @@
 
             "motes_eui64":                                 [],
             
-            "user_minimlNumChans":                          16,
-            "user_neighbors_num_channel_selection":         true,
-            "user_period_eb":                               true
+            "user_minimlNumChans":                         16,
+            "user_neighbors_num_channel_selection":        true,
+            "user_period_eb":                              true,
+            "user_eb_delay_sf":                            0
         }
     },
     "logging":                                             "all",

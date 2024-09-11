@@ -52,13 +52,13 @@ LOG_SECJOIN_UNJOINED              = {u'type': u'secjoin.unjoined',          u'ke
 LOG_SECJOIN_FAILED                = {u'type': u'secjoin.failed',            u'keys': [u'_mote_id']}
 
 # === rpl
-LOG_RPL_DIO_TX                    = {u'type': u'rpl.dio.tx',                u'keys': [u'_mote_id',u'packet']}
-LOG_RPL_DIO_RX                    = {u'type': u'rpl.dio.rx',                u'keys': [u'_mote_id',u'packet',u'src_id', u'is_preferred_parent', u'rank']}
+LOG_RPL_DIO_TX                    = {u'type': u'rpl.dio.tx',                u'keys': [u'_mote_id',u'packet',u'hops']}
+LOG_RPL_DIO_RX                    = {u'type': u'rpl.dio.rx',                u'keys': [u'_mote_id',u'packet',u'src_id', u'is_preferred_parent', u'rank',u'hops']}
 LOG_RPL_DAO_TX                    = {u'type': u'rpl.dao.tx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DAO_RX                    = {u'type': u'rpl.dao.rx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DIS_TX                    = {u'type': u'rpl.dis.tx',                u'keys': [u'_mote_id',u'packet']}
 LOG_RPL_DIS_RX                    = {u'type': u'rpl.dis.rx',                u'keys': [u'_mote_id',u'packet']}
-LOG_RPL_CHURN                     = {u'type': u'rpl.churn',                 u'keys': [u'_mote_id',u'preferredParent', u'asn']}
+LOG_RPL_CHURN                     = {u'type': u'rpl.churn',                 u'keys': [u'_mote_id',u'preferredParent', u'asn', u'parent_dio_rank']}
 LOG_RPL_LOCAL_REPAIR              = {u'type': u'rpl.local_repair',          u'keys': [u'_mote_id']}
 
 # === 6LoWPAN
@@ -81,7 +81,7 @@ LOG_SIXP_TRANSACTION_ABORTED      = {u'type': u'sixp.abort',                u'ke
 
 # === tsch
 LOG_TSCH_SYNCED                   = {u'type': u'tsch.synced',               u'keys': [u'_mote_id']}
-LOG_TSCH_DESYNCED                 = {u'type': u'tsch.desynced',             u'keys': [u'_mote_id']}
+LOG_TSCH_DESYNCED                 = {u'type': u'tsch.desynced',             u'keys': [u'_mote_id',u'code']}
 LOG_TSCH_EB_TX                    = {u'type': u'tsch.eb.tx',                u'keys': [u'_mote_id',u'packet']}
 LOG_TSCH_EB_RX                    = {u'type': u'tsch.eb.rx',                u'keys': [u'_mote_id',u'packet']}
 LOG_TSCH_ADD_CELL                 = {u'type': u'tsch.add_cell',             u'keys': [u'_mote_id',u'slotFrameHandle',u'slotOffset',u'channelOffset',u'neighbor',u'cellOptions']}
@@ -93,7 +93,7 @@ LOG_TSCH_ADD_SLOTFRAME            = {u'type': u'tsch.add_slotframe',        u'ke
 LOG_TSCH_DELETE_SLOTFRAME         = {u'type': u'tsch.delete_slotframe',     u'keys': [u'_mote_id',u'slotFrameHandle',u'length']}
 
 # === mote info
-LOG_RADIO_STATS                   = {u'type': u'radio.stats',               u'keys': [u'_mote_id', u'idle_listen', u'tx_data_rx_ack', u'tx_data', u'rx_data_tx_ack', u'rx_data', u'sleep']}
+LOG_RADIO_STATS                   = {u'type': u'radio.stats',               u'keys': [u'_mote_id', u'is_sync', u'idle_listen', u'tx_data_rx_ack', u'tx_data', u'rx_data_tx_ack', u'rx_data', u'sleep']}
 LOG_MAC_ADD_ADDR                  = {u'type': u'mac.add_addr',              u'keys': [u'_mote_id', u'type', u'addr']}
 LOG_IPV6_ADD_ADDR                 = {u'type': u'ipv6.add_addr',             u'keys': [u'_mote_id', u'type', u'addr']}
 
