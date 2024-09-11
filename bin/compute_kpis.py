@@ -1265,11 +1265,16 @@ def kpis_all(inputfile, subfolder):
 
     avgStates['rpl_received_dio_ids_num'] = calculate_stats(received_dio_id_num_avg_data)
  #=========================================================================================================================
+    # 파일 설정에서 실행 시간을 가져옴 (분 단위)
+    total_minutes = math.ceil(file_settings['exec_numSlotframesPerRun'] / 60)
 
     # 결과를 저장할 딕셔너리 초기화
     results = {}
     packet_sums = {}
     minute_counts = {}  # 각 분의 데이터 개수를 저장할 딕셔너리
+
+    # 전체 시간 범위를 생성 (0분부터 total_minutes-1분까지)
+    all_minutes = list(range(total_minutes))
 
     # 각 run_id와 mote_id에 대해 데이터를 수집
     for run_id, per_mote_stats in sorted(allstats.items(), key=lambda x: str(x[0])):  # run_id를 문자열로 변환 후 정렬
@@ -1289,9 +1294,14 @@ def kpis_all(inputfile, subfolder):
                         
                         packet_sums[run_id][minute][hops] += count
 
-        # 각 run_id에 대한 데이터프레임 생성 및 저장
-        df_run = pd.DataFrame.from_dict(packet_sums[run_id], orient='index').fillna(0).sort_index()
+    # 각 run_id에 대한 데이터프레임 생성 및 저장
+    for run_id, data in packet_sums.items():
+        df_run = pd.DataFrame.from_dict(data, orient='index').fillna(0).sort_index()
         df_run = df_run[sorted(df_run.columns)]  # 열(hops)을 오름차순으로 정렬
+        
+        # 전체 시간 범위로 인덱스를 맞추고, 비어있는 시간대는 0으로 채움
+        df_run = df_run.reindex(all_minutes, fill_value=0)
+        
         results[run_id] = df_run
 
         # 각 분의 데이터를 가진 run_id 수를 계산
@@ -1316,6 +1326,7 @@ def kpis_all(inputfile, subfolder):
     # 평균 계산 (각 분에 대해 데이터가 있는 run_id의 개수로 나누기)
     df_average_packets = pd.DataFrame.from_dict(average_packets, orient='index').sort_index()
     df_average_packets = df_average_packets.div(minute_counts.values(), axis=0).fillna(0)
+    df_average_packets = df_average_packets.reindex(all_minutes, fill_value=0)  # 동일한 시간 범위로 인덱스를 맞추고 빈 값을 0으로 채움
     df_average_packets = df_average_packets[sorted(df_average_packets.columns)]  # 열(hops)을 오름차순으로 정렬
 
     # 엑셀 파일로 저장
