@@ -177,6 +177,7 @@ def kpis_all(inputfile, subfolder):
             allstats[run_id][mote_id]['rpl_first_asn'] = None
             allstats[run_id][mote_id]['received_dio_rank_list_after_sync'] = {}
             allstats[run_id][mote_id]['rpl_parent_id'] = None
+            allstats[run_id][mote_id]['rpl_parent_change_num'] = None
 
         elif logline['_type'] == SimLog.LOG_TSCH_TXDONE['type']:
             # shorthands
@@ -1116,6 +1117,7 @@ def kpis_all(inputfile, subfolder):
 
     for packet_type in rcv_packet_type_set:
         data = []
+        data_rate = []
         for run_id, stats in allstats.items():
             if packet_type in stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'] and packet_type in stats['global-stats']['minimalcell_tx']['num_per_packet_type_in_no_if']:
                 data.append(stats['global-stats']['minimalcell_rx']['num_per_packet_type_in_no_if'][packet_type])
@@ -1574,9 +1576,9 @@ def kpis_all(inputfile, subfolder):
             if 'last_hops' in motestats and mote_id != 0 and motestats['last_hops'] is not None:
                 last_hops.append(motestats['last_hops'])
 
-            # sync_first_asns에 데이터가 있는 경우에만 평균 계산
-            if len(last_hops) > 0:
-                last_hops_avg_data.append(sum(last_hops) / len(last_hops))
+        # sync_first_asns에 데이터가 있는 경우에만 평균 계산
+        if len(last_hops) > 0:
+            last_hops_avg_data.append(sum(last_hops) / len(last_hops))
 
     # 각 run_id의 첫번째 싱크 타임에 대한 통계를 계산
     avgStates['last_hops'] = calculate_stats(last_hops_avg_data)
