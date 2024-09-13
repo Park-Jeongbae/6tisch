@@ -41,7 +41,6 @@ from .trickle_timer import TrickleTimer
 class Rpl(object):
     #RFC 6550
     DEFAULT_DIO_INTERVAL_MIN = 3
-    DEFAULT_DIO_INTERVAL_DOUBLINGS = 20
     DEFAULT_DIO_REDUNDANCY_CONSTANT = 10
 
     # locally-defined constants
@@ -62,7 +61,7 @@ class Rpl(object):
         self.of                        = RplOFNone(self)
         self.trickle_timer             = TrickleTimer(
             i_min    = pow(2, self.DEFAULT_DIO_INTERVAL_MIN),
-            i_max    = self.DEFAULT_DIO_INTERVAL_DOUBLINGS,
+            i_max    = self.settings.dio_interval_doublings,
             k        = self.DEFAULT_DIO_REDUNDANCY_CONSTANT,
             callback = self._send_DIO
         )
