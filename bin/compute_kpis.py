@@ -88,6 +88,8 @@ def init_mote():
         'received_dio_rank_list_after_sync' : {},
         'desync_asn' : [],
         'desync_code' : {},
+        'desync_child_num' : 0,
+        'desync_router_num' : 0,
         'keep_alive_asn' : [],
         'dio_tx_num' : {}
     }
@@ -156,6 +158,8 @@ def kpis_all(inputfile, subfolder):
             # shorthands
             mote_id    = logline['_mote_id']
             code   = logline['code']
+            child_ids = logline['child_ids']
+
             # only log non-dagRoot sync times
             if mote_id == DAGROOT_ID:
                 continue
@@ -170,6 +174,13 @@ def kpis_all(inputfile, subfolder):
 
             # 해당 code에 asn 값을 추가
             allstats[run_id][mote_id]['desync_code'][code].append(asn)
+
+            # 디싱크 시 자식의 개수 저장
+            allstats[run_id][mote_id]['desync_child_num'] += len(child_ids)
+
+            # 중계 노드의 Desync 횟수 저장
+            if len(child_ids) != 0:
+                allstats[run_id][mote_id]['desync_router_num'] += 1
 
             # RPL에 참여했던 부분도 삭제함
             allstats[run_id][mote_id]['rpl_join'] = False
@@ -1349,6 +1360,8 @@ def kpis_all(inputfile, subfolder):
     desync_num_avg_data = []     # 비동기화 횟수를 구함
     desync_asn_avg_data = []     # 비동기화 시점의 평균
     code_counts_by_code_avg_data = []  # 각 run_id별 코드 개수를 저장
+    desync_child_num_data = []
+    desync_router_num_data = []
 
     # 모든 run_id에 대해 데이터를 처리
     for run_id, per_mote_stats in allstats.items():
@@ -1356,6 +1369,8 @@ def kpis_all(inputfile, subfolder):
         desync_asn_sum = 0
         num_mote = 0
         num_desync_mote = 0
+        desync_child_num = 0
+        desync_router_num = 0
         # 각 코드의 개수를 저장하기 위한 딕셔너리 초기화
         code_count = {'Sync': 0, 'Joined': 0, 'RPL': 0, 'Cell_alloc': 0} 
 
@@ -1378,6 +1393,9 @@ def kpis_all(inputfile, subfolder):
                         count = len(desync_codes.get(code, []))
                         code_count[code] += count
 
+                desync_child_num += motestats['desync_child_num']
+                desync_router_num  += motestats['desync_router_num']
+
         # run_id별 코드 개수를 저장
         code_counts_by_code_avg_data.append(code_count)
 
@@ -1388,12 +1406,18 @@ def kpis_all(inputfile, subfolder):
         # 비동기화 장치들의 평균 ASN을 계산
         if num_desync_mote != 0:
             desync_asn_avg_data.append(desync_asn_sum / num_desync_mote)
+        
+        # 네트워크 전체에서 중계노드 디싱크로 인해 발생하는 자식 노드의 디싱크 횟수를 저장함
+        desync_child_num_data.append(desync_child_num)
+        desync_router_num_data.append(desync_router_num)
 
     # 코드별 데이터를 모아 리스트로 변환
     sync_list = [code_counts['Sync'] for code_counts in code_counts_by_code_avg_data]
     joined_list = [code_counts['Joined'] for code_counts in code_counts_by_code_avg_data]
     rpl_list = [code_counts['RPL'] for code_counts in code_counts_by_code_avg_data]
     cell_alloc_list = [code_counts['Cell_alloc'] for code_counts in code_counts_by_code_avg_data]
+    print("desync_child_num", desync_child_num)
+    print("desync_router_num", desync_router_num)
 
     # 평균 및 표준편차 계산
     avgStates['desync_num'] = calculate_stats(desync_num_avg_data)
@@ -1402,6 +1426,8 @@ def kpis_all(inputfile, subfolder):
     avgStates['desync_code_joined'] = calculate_stats(joined_list)
     avgStates['desync_code_rpl'] = calculate_stats(rpl_list)
     avgStates['desync_code_alloc'] = calculate_stats(cell_alloc_list)
+    avgStates['desync_child_num_network'] = calculate_stats(desync_child_num_data)
+    avgStates['desync_router_num_network'] = calculate_stats(desync_router_num_data)
  #=========================================================================================================================
     # 네트워크에 싱크되어 있던 시간을 측정함
     sync_duration_s_avg_data = []
