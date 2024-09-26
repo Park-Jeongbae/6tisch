@@ -91,6 +91,7 @@ def init_mote():
         'desync_child_num' : 0,
         'desync_router_num' : 0,
         'keep_alive_asn' : [],
+        'autonomous_tx_acked' : [],
         'dio_tx_num' : {}
     }
 
@@ -194,9 +195,14 @@ def kpis_all(inputfile, subfolder):
             # shorthands
             mote_id    = logline['_mote_id']
             packet     = logline['packet']
+            isAutonomousTx  = logline['isAutonomousTx']
+            isACKed  = logline['isACKed']
 
             if packet[u'type'] == d.PKT_TYPE_KEEP_ALIVE:
                 allstats[run_id][mote_id]['keep_alive_asn'].append(asn) 
+
+            if isAutonomousTx:
+                allstats[run_id][mote_id]['autonomous_tx_acked'].append(isACKed) 
 
         elif logline['_type'] == SimLog.LOG_SECJOIN_JOINED['type']:
             # joined
@@ -1416,8 +1422,6 @@ def kpis_all(inputfile, subfolder):
     joined_list = [code_counts['Joined'] for code_counts in code_counts_by_code_avg_data]
     rpl_list = [code_counts['RPL'] for code_counts in code_counts_by_code_avg_data]
     cell_alloc_list = [code_counts['Cell_alloc'] for code_counts in code_counts_by_code_avg_data]
-    print("desync_child_num", desync_child_num)
-    print("desync_router_num", desync_router_num)
 
     # 평균 및 표준편차 계산
     avgStates['desync_num'] = calculate_stats(desync_num_avg_data)
@@ -1471,6 +1475,36 @@ def kpis_all(inputfile, subfolder):
         kp_num_avg_data.append(kp_num_sum / num_mote)
 
     avgStates['keep_alive_asn'] = calculate_stats(kp_num_avg_data)
+ #=========================================================================================================================
+    auto_tx_num_avg_data = []
+    auto_success_rate_avg_data = []
+
+    for run_id, per_mote_stats in allstats.items():
+        auto_tx_num_sum = 0
+        auto_success_rate_sum = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'autonomous_tx_acked' in motestats:
+                # autonomous_tx_acked의 길이가 0이 아닌 경우에만 처리
+                if len(motestats['autonomous_tx_acked']) > 0:
+                    auto_tx_num_sum += len(motestats['autonomous_tx_acked'])
+                    # 각 노드의 성공률 계산 (수신된 True의 비율)
+                    auto_success_rate_sum += sum(motestats['autonomous_tx_acked']) / len(motestats['autonomous_tx_acked'])
+                    num_mote += 1
+        
+        # 노드별 평균 전송 패킷 수 및 성공률을 구함
+        if num_mote > 0:
+            auto_tx_num_avg_data.append(auto_tx_num_sum / num_mote)
+            auto_success_rate_avg_data.append(auto_success_rate_sum / num_mote)
+        else:
+            # 만약 모트가 하나도 없다면 0을 추가
+            auto_tx_num_avg_data.append(0)
+            auto_success_rate_avg_data.append(0)
+
+    # 평균 데이터 계산 및 저장
+    avgStates['auto_tx_num_avg_data'] = calculate_stats(auto_tx_num_avg_data)
+    avgStates['auto_success_rate_avg_data'] = calculate_stats(auto_success_rate_avg_data)
+
  #=========================================================================================================================
     # DIO의 rank 및 수신 횟수에 대해 조사
     rpl_received_dio_rank_max_data = []

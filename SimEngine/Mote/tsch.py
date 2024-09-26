@@ -612,6 +612,17 @@ class Tsch(object):
 
         assert self.waitingFor == d.WAITING_FOR_TX
 
+        isAutonomousTx = False
+        if self.mote.id != 0:
+            slot_offset, channel_offset = self.mote.sf._compute_autonomous_cell(self.clock.source)
+    
+            if  active_cell.slot_offset == slot_offset and \
+                active_cell.channel_offset == channel_offset and \
+                active_cell.mac_addr == self.clock.source and \
+                d.CELLOPTION_RX not in active_cell.options:
+
+                isAutonomousTx = True
+
         # log
         self.log(
             SimEngine.SimLog.LOG_TSCH_TXDONE,
@@ -628,6 +639,7 @@ class Tsch(object):
                 ),
                 u'packet':         self.pktToSend,
                 u'isACKed':        isACKed,
+                u'isAutonomousTx': isAutonomousTx
             }
         )
 
