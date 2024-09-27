@@ -145,38 +145,37 @@ class Tsch(object):
                         if len(cells) != 0:
                             code = "Cell_alloc"
 
-            ret = None
-            slotframe = self.mote.tsch.get_slotframe(
-                self.mote.sf.SLOTFRAME_HANDLE_NEGOTIATED_CELLS
-            )
+            child_ids = []
+            child_router_ids = []
+            for child_id in range(self.settings.exec_numMotes):
 
-            if slotframe:
-                cells = slotframe.get_cells_filtered(cell_options=[d.CELLOPTION_RX])
-                ret = [
-                    cell for cell in cells
-                    if cell.options == [d.CELLOPTION_RX]
-                ]
-            
-            child_id_set = set()  # 10진수로 변환된 mac_addr를 저장할 set (중복 제거)
-            if ret is not None:
-                for cell in ret:
-                    child_mac_addr = cell.mac_addr
-                    cleaned_hex_string = child_mac_addr.replace('-', '')
-                    last_four_hex = cleaned_hex_string[-4:]
-                    child_id = int(last_four_hex, 16)
+                child = self.engine.motes[child_id]
+                
+                if self.mote.is_my_mac_addr(child.tsch.clock.source):
+                    ret = None
+                    slotframe = child.tsch.get_slotframe(
+                        child.sf.SLOTFRAME_HANDLE_NEGOTIATED_CELLS
+                    )
 
-                    child = self.engine.motes[child_id]
+                    if slotframe:
+                        cells = slotframe.get_cells_filtered(cell_options=[d.CELLOPTION_RX])
+                        ret = [
+                            cell for cell in cells
+                            if cell.options == [d.CELLOPTION_RX]
+                        ]
 
-                    if child.rpl.mote.rpl.dodagId is not None and  child.rpl.getPreferredParent() is not None and self.mote.is_my_mac_addr(child.rpl.getPreferredParent()): 
-                        child_id_set.add(child_id)  # set에 추가 (중복 자동 제거)
-
+                    if len(ret) != 0:
+                        child_router_ids.append(child_id)
+                    else:
+                        child_ids.append(child_id)
             # log
             self.log(
                 SimEngine.SimLog.LOG_TSCH_DESYNCED,
                 {
                     "_mote_id":   self.mote.id,
                     'code': code,
-                    'child_ids': list(child_id_set)
+                    'child_ids': child_ids,
+                    'child_router_ids': child_router_ids             
                 }
             )
             # DAGRoot gets never desynchronized
