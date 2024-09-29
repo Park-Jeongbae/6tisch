@@ -790,6 +790,9 @@ class Tsch(object):
                 return False # isACKed
 
             # if I get here, I received a frame at the link layer (either unicast for me, or broadcast)
+            is_clock_source = False
+            if self.clock.source is not None and  self.clock.source == packet[u'mac'][u'srcMac']:
+                is_clock_source = True
 
             # log
             self.log(
@@ -806,6 +809,7 @@ class Tsch(object):
                         if active_cell else None
                     ),
                     u'packet':         packet,
+                    u'is_clock_source': is_clock_source
                 }
             )
 

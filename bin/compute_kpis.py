@@ -98,7 +98,9 @@ def init_mote():
         'autonomous_tx_acked_6p' : {},
         'autonomous_tx_acked_kp' : {},
         'autonomous_tx_acked' : [],
-        'dio_tx_num' : {}
+        'dio_tx_num' : {},
+        'packets_by_type_tx' : {},
+        'packets_by_type_rx' : {}
     }
 
 # =========================== KPIs ============================================
@@ -207,6 +209,7 @@ def kpis_all(inputfile, subfolder):
             packet     = logline['packet']
             isAutonomousTx  = logline['isAutonomousTx']
             isACKed  = logline['isACKed']
+            packet_type = logline['packet']['type']  # 패킷 타입
 
             if packet[u'type'] == d.PKT_TYPE_KEEP_ALIVE:
                 allstats[run_id][mote_id]['keep_alive_asn'].append(asn) 
@@ -231,6 +234,38 @@ def kpis_all(inputfile, subfolder):
                     if 'autonomous_tx_acked_kp' not in allstats[run_id][mote_id]:
                         allstats[run_id][mote_id]['autonomous_tx_acked_kp'] = {}
                     allstats[run_id][mote_id]['autonomous_tx_acked_kp'][asn] = isACKed
+
+            # 패킷 타입별로 데이터를 저장할 구조가 없으면 생성
+            if 'packets_by_type_tx' not in allstats[run_id][mote_id]:
+                allstats[run_id][mote_id]['packets_by_type_tx'] = {}
+
+            # 패킷 타입에 해당하는 데이터가 없다면 생성
+            if packet_type not in allstats[run_id][mote_id]['packets_by_type_tx']:
+                allstats[run_id][mote_id]['packets_by_type_tx'][packet_type] = []
+
+            allstats[run_id][mote_id]['packets_by_type_tx'][packet_type].append(asn)
+
+        elif logline['_type'] == SimLog.LOG_TSCH_RXDONE['type']:
+            # shorthands
+            mote_id = logline['_mote_id']
+            packet_type = logline['packet']['type']  # 패킷 타입
+            is_clock_source = logline['is_clock_source']  # 클럭 소스 여부
+
+            # 패킷 타입별로 데이터를 저장할 구조가 없으면 생성
+            if 'packets_by_type_rx' not in allstats[run_id][mote_id]:
+                allstats[run_id][mote_id]['packets_by_type_rx'] = {}
+
+            # 패킷 타입에 해당하는 데이터가 없다면 생성
+            if packet_type not in allstats[run_id][mote_id]['packets_by_type_rx']:
+                allstats[run_id][mote_id]['packets_by_type_rx'][packet_type] = {
+                    'clock_source': [],
+                    'non_clock_source': []
+                }
+
+            if is_clock_source:
+                allstats[run_id][mote_id]['packets_by_type_rx'][packet_type]['clock_source'].append(asn)
+            else:
+                allstats[run_id][mote_id]['packets_by_type_rx'][packet_type]['non_clock_source'].append(asn)
 
         elif logline['_type'] == SimLog.LOG_SECJOIN_JOINED['type']:
             # joined
@@ -2083,6 +2118,94 @@ def kpis_all(inputfile, subfolder):
             df_sum.to_excel(writer, sheet_name='summary')
 
  #=========================================================================================================================
+    # 패킷 타입별로 평균 데이터를 저장할 변수
+    packet_type_avg_data = {}
+
+    # 각 run_id에 대해 모트별로 패킷 타입별 평균을 구함
+    for run_id, per_mote_stats in allstats.items():
+        for mote_id, motestats in per_mote_stats.items():
+            if 'packets_by_type_rx' in motestats:
+                for packet_type, packet_data in motestats['packets_by_type_rx'].items():
+                    
+                    # 패킷 타입별로 초기화
+                    if packet_type not in packet_type_avg_data:
+                        packet_type_avg_data[packet_type] = {
+                            'clock_source_avg_by_run': [],
+                            'non_clock_source_avg_by_run': []
+                        }
+                    
+                    # 클럭 소스 패킷 처리
+                    if len(packet_data['clock_source']) > 0:
+                        clock_source_avg = sum(packet_data['clock_source']) / len(packet_data['clock_source'])
+                        packet_type_avg_data[packet_type]['clock_source_avg_by_run'].append(clock_source_avg)
+
+                    # 비클럭 소스 패킷 처리
+                    if len(packet_data['non_clock_source']) > 0:
+                        non_clock_source_avg = sum(packet_data['non_clock_source']) / len(packet_data['non_clock_source'])
+                        packet_type_avg_data[packet_type]['non_clock_source_avg_by_run'].append(non_clock_source_avg)
+
+    # 각 패킷 타입별로 전체 run_id에 대한 통계를 calculate_stats로 계산
+    overall_packet_type_avg = {}
+
+    for packet_type, averages in packet_type_avg_data.items():
+        # 각 run_id의 클럭 소스 패킷 평균에 대한 통계 계산
+        if len(averages['clock_source_avg_by_run']) > 0:
+            clock_source_stats = calculate_stats(averages['clock_source_avg_by_run'])
+        else:
+            clock_source_stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+
+        # 각 run_id의 비클럭 소스 패킷 평균에 대한 통계 계산
+        if len(averages['non_clock_source_avg_by_run']) > 0:
+            non_clock_source_stats = calculate_stats(averages['non_clock_source_avg_by_run'])
+        else:
+            non_clock_source_stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+
+        # 결과를 저장
+        overall_packet_type_avg[packet_type] = {
+            'clock_source_stats': clock_source_stats,
+            'non_clock_source_stats': non_clock_source_stats
+        }
+
+    # 최종 결과를 avgStates에 저장
+    avgStates['packets_by_type_rx'] = overall_packet_type_avg
+    
+    #=========================================================================================================================
+    # 패킷 타입별로 통계 데이터를 저장할 변수
+    packet_type_tx_avg_data = {}
+
+    # 각 run_id에 대해 모트별로 패킷 타입별 통계를 구함
+    for run_id, per_mote_stats in allstats.items():
+        for mote_id, motestats in per_mote_stats.items():
+            if 'packets_by_type_tx' in motestats:
+                for packet_type, packet_data in motestats['packets_by_type_tx'].items():
+
+                    # 패킷 타입별로 초기화
+                    if packet_type not in packet_type_tx_avg_data:
+                        packet_type_tx_avg_data[packet_type] = {
+                            'asn_avg_by_run': []
+                        }
+
+                    # 패킷 타입에 대한 통계 계산
+                    if len(packet_data) > 0:
+                        packet_avg = sum(packet_data) / len(packet_data)
+                        packet_type_tx_avg_data[packet_type]['asn_avg_by_run'].append(packet_avg)
+
+    # 각 패킷 타입별 전체 run_id에 대한 통계 계산
+    overall_packet_type_tx_avg = {}
+
+    for packet_type, averages in packet_type_tx_avg_data.items():
+        # 각 run_id에 대한 평균, 표준 편차, 신뢰 구간 계산
+        if len(averages['asn_avg_by_run']) > 0:
+            stats = calculate_stats(averages['asn_avg_by_run'])
+        else:
+            stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+
+        # 결과를 저장
+        overall_packet_type_tx_avg[packet_type] = stats
+
+    # 최종 결과를 avgStates에 저장
+    avgStates['packets_by_type_tx'] = overall_packet_type_tx_avg
+
     # === remove unnecessary stats
 
     for (run_id, per_mote_stats) in list(allstats.items()):
