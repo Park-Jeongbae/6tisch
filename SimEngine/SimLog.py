@@ -81,13 +81,13 @@ LOG_SIXP_TRANSACTION_ABORTED      = {u'type': u'sixp.abort',                u'ke
 
 # === tsch
 LOG_TSCH_SYNCED                   = {u'type': u'tsch.synced',               u'keys': [u'_mote_id']}
-LOG_TSCH_DESYNCED                 = {u'type': u'tsch.desynced',             u'keys': [u'_mote_id',u'code',u'child_ids']}
+LOG_TSCH_DESYNCED                 = {u'type': u'tsch.desynced',             u'keys': [u'_mote_id',u'code',u'child_ids',u'child_router_ids']}
 LOG_TSCH_EB_TX                    = {u'type': u'tsch.eb.tx',                u'keys': [u'_mote_id',u'packet']}
 LOG_TSCH_EB_RX                    = {u'type': u'tsch.eb.rx',                u'keys': [u'_mote_id',u'packet']}
 LOG_TSCH_ADD_CELL                 = {u'type': u'tsch.add_cell',             u'keys': [u'_mote_id',u'slotFrameHandle',u'slotOffset',u'channelOffset',u'neighbor',u'cellOptions']}
 LOG_TSCH_DELETE_CELL              = {u'type': u'tsch.delete_cell',          u'keys': [u'_mote_id',u'slotFrameHandle',u'slotOffset',u'channelOffset',u'neighbor',u'cellOptions']}
 LOG_TSCH_TXDONE                   = {u'type': u'tsch.txdone',               u'keys': [u'_mote_id',u'channel',u'slot_offset', u'channel_offset', u'packet',u'isACKed', u'isAutonomousTx']}
-LOG_TSCH_RXDONE                   = {u'type': u'tsch.rxdone',               u'keys': [u'_mote_id',u'channel',u'slot_offset', u'channel_offset', u'packet']}
+LOG_TSCH_RXDONE                   = {u'type': u'tsch.rxdone',               u'keys': [u'_mote_id',u'channel',u'slot_offset', u'channel_offset', u'packet',u'is_clock_source']}
 LOG_TSCH_BACKOFF_EXPONENT_UPDATED = {u'type': u'tsch.be.updated',           u'keys': [u'_mote_id',u'old_be', u'new_be']}
 LOG_TSCH_ADD_SLOTFRAME            = {u'type': u'tsch.add_slotframe',        u'keys': [u'_mote_id',u'slotFrameHandle',u'length']}
 LOG_TSCH_DELETE_SLOTFRAME         = {u'type': u'tsch.delete_slotframe',     u'keys': [u'_mote_id',u'slotFrameHandle',u'length']}

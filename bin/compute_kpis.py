@@ -58,6 +58,7 @@ def init_mote():
         'rpl_asn' : None,
         'rpl_first_asn' : None,
         'rpl_parent_change_num' : None,
+        'rpl_parent_change_num_total' : None,
         'rpl_time_s' : None,
         'rpl_parent_id' : None,
         'sync_time_s': None,
@@ -89,10 +90,17 @@ def init_mote():
         'desync_asn' : [],
         'desync_code' : {},
         'desync_child_num' : 0,
+        'desync_child_router_num': 0,
         'desync_router_num' : 0,
         'keep_alive_asn' : [],
+        'keep_alive_acked' : [],
+        'autonomous_tx_acked_jrq' : {},
+        'autonomous_tx_acked_6p' : {},
+        'autonomous_tx_acked_kp' : {},
         'autonomous_tx_acked' : [],
-        'dio_tx_num' : {}
+        'dio_tx_num' : {},
+        'packets_by_type_tx' : {},
+        'packets_by_type_rx' : {}
     }
 
 # =========================== KPIs ============================================
@@ -160,6 +168,7 @@ def kpis_all(inputfile, subfolder):
             mote_id    = logline['_mote_id']
             code   = logline['code']
             child_ids = logline['child_ids']
+            child_router_ids = logline['child_router_ids']
 
             # only log non-dagRoot sync times
             if mote_id == DAGROOT_ID:
@@ -176,8 +185,11 @@ def kpis_all(inputfile, subfolder):
             # 해당 code에 asn 값을 추가
             allstats[run_id][mote_id]['desync_code'][code].append(asn)
 
-            # 디싱크 시 자식의 개수 저장
+            # 디싱크 시 중계 노드가 아닌 자식의 개수 저장
             allstats[run_id][mote_id]['desync_child_num'] += len(child_ids)
+
+            # 디싱크 시 중계 노드인 아닌 자식의 개수 저장
+            allstats[run_id][mote_id]['desync_child_router_num'] += len(child_router_ids)
 
             # 중계 노드의 Desync 횟수 저장
             if len(child_ids) != 0:
@@ -197,12 +209,63 @@ def kpis_all(inputfile, subfolder):
             packet     = logline['packet']
             isAutonomousTx  = logline['isAutonomousTx']
             isACKed  = logline['isACKed']
+            packet_type = logline['packet']['type']  # 패킷 타입
 
             if packet[u'type'] == d.PKT_TYPE_KEEP_ALIVE:
                 allstats[run_id][mote_id]['keep_alive_asn'].append(asn) 
 
+                if not isAutonomousTx:
+                    allstats[run_id][mote_id]['keep_alive_acked'].append(isACKed) 
+
             if isAutonomousTx:
-                allstats[run_id][mote_id]['autonomous_tx_acked'].append(isACKed) 
+                allstats[run_id][mote_id]['autonomous_tx_acked'].append(isACKed)
+                if packet[u'type'] == d.PKT_TYPE_JOIN_REQUEST:
+                    # 딕셔너리로 ASN을 키로 하고, ACK 수신 여부를 값으로 저장
+                    if 'autonomous_tx_acked_jrq' not in allstats[run_id][mote_id]:
+                        allstats[run_id][mote_id]['autonomous_tx_acked_jrq'] = {}
+                    allstats[run_id][mote_id]['autonomous_tx_acked_jrq'][asn] = isACKed
+
+                elif packet[u'type'] == d.PKT_TYPE_SIXP:
+                    if 'autonomous_tx_acked_6p' not in allstats[run_id][mote_id]:
+                        allstats[run_id][mote_id]['autonomous_tx_acked_6p'] = {}
+                    allstats[run_id][mote_id]['autonomous_tx_acked_6p'][asn] = isACKed
+
+                elif packet[u'type'] == d.PKT_TYPE_KEEP_ALIVE:
+                    if 'autonomous_tx_acked_kp' not in allstats[run_id][mote_id]:
+                        allstats[run_id][mote_id]['autonomous_tx_acked_kp'] = {}
+                    allstats[run_id][mote_id]['autonomous_tx_acked_kp'][asn] = isACKed
+
+            # 패킷 타입별로 데이터를 저장할 구조가 없으면 생성
+            if 'packets_by_type_tx' not in allstats[run_id][mote_id]:
+                allstats[run_id][mote_id]['packets_by_type_tx'] = {}
+
+            # 패킷 타입에 해당하는 데이터가 없다면 생성
+            if packet_type not in allstats[run_id][mote_id]['packets_by_type_tx']:
+                allstats[run_id][mote_id]['packets_by_type_tx'][packet_type] = []
+
+            allstats[run_id][mote_id]['packets_by_type_tx'][packet_type].append(asn)
+
+        elif logline['_type'] == SimLog.LOG_TSCH_RXDONE['type']:
+            # shorthands
+            mote_id = logline['_mote_id']
+            packet_type = logline['packet']['type']  # 패킷 타입
+            is_clock_source = logline['is_clock_source']  # 클럭 소스 여부
+
+            # 패킷 타입별로 데이터를 저장할 구조가 없으면 생성
+            if 'packets_by_type_rx' not in allstats[run_id][mote_id]:
+                allstats[run_id][mote_id]['packets_by_type_rx'] = {}
+
+            # 패킷 타입에 해당하는 데이터가 없다면 생성
+            if packet_type not in allstats[run_id][mote_id]['packets_by_type_rx']:
+                allstats[run_id][mote_id]['packets_by_type_rx'][packet_type] = {
+                    'clock_source': [],
+                    'non_clock_source': []
+                }
+
+            if is_clock_source:
+                allstats[run_id][mote_id]['packets_by_type_rx'][packet_type]['clock_source'].append(asn)
+            else:
+                allstats[run_id][mote_id]['packets_by_type_rx'][packet_type]['non_clock_source'].append(asn)
 
         elif logline['_type'] == SimLog.LOG_SECJOIN_JOINED['type']:
             # joined
@@ -381,6 +444,11 @@ def kpis_all(inputfile, subfolder):
                     allstats[run_id][mote_id]['rpl_parent_change_num'] = 1
                 else:
                     allstats[run_id][mote_id]['rpl_parent_change_num'] += 1
+
+                if allstats[run_id][mote_id]['rpl_parent_change_num_total'] is None:
+                    allstats[run_id][mote_id]['rpl_parent_change_num_total'] = 1
+                else:
+                    allstats[run_id][mote_id]['rpl_parent_change_num_total'] += 1
 
                 allstats[run_id][mote_id]['rpl_join'] = True
                 allstats[run_id][mote_id]['rpl_asn']  = asn
@@ -1211,10 +1279,13 @@ def kpis_all(inputfile, subfolder):
     rpl_motes_num_data = []
     rpl_rank_avg_data = []
     rpl_parent_change_num_avg_data = []
+    rpl_parent_change_num_total_avg_data = []
+
     for (run_id, run_motes) in list(allstats.items()):
         rpl_motes_num = 0
         rpl_rank = []
         rpl_parent_change_num = []
+        rpl_parent_change_num_total = []
 
         for (mote_id, motestats) in list(run_motes.items()):
             if 'rpl_join' in motestats:
@@ -1222,14 +1293,17 @@ def kpis_all(inputfile, subfolder):
                     rpl_motes_num += 1
                     rpl_rank.append(motestats['rank'][-1])
                     rpl_parent_change_num.append(motestats['rpl_parent_change_num'])
+                    rpl_parent_change_num_total.append(motestats['rpl_parent_change_num_total'])
 
         rpl_motes_num_data.append(rpl_motes_num)
         rpl_rank_avg_data.append(np.mean(rpl_rank))
         rpl_parent_change_num_avg_data.append(np.mean(rpl_parent_change_num))
+        rpl_parent_change_num_total_avg_data.append(np.mean(rpl_parent_change_num_total))
 
     avgStates['rpl_motes_num'] = calculate_stats(rpl_motes_num_data)
     avgStates['rpl_rank'] = calculate_stats(rpl_rank_avg_data)
     avgStates['rpl_parent_change_num'] = calculate_stats(rpl_parent_change_num_avg_data)
+    avgStates['rpl_parent_change_num_total'] = calculate_stats(rpl_parent_change_num_total_avg_data)
 
  #=========================================================================================================================
 
@@ -1367,6 +1441,7 @@ def kpis_all(inputfile, subfolder):
     desync_asn_avg_data = []     # 비동기화 시점의 평균
     code_counts_by_code_avg_data = []  # 각 run_id별 코드 개수를 저장
     desync_child_num_data = []
+    desync_child_router_num_data = []
     desync_router_num_data = []
 
     # 모든 run_id에 대해 데이터를 처리
@@ -1376,6 +1451,7 @@ def kpis_all(inputfile, subfolder):
         num_mote = 0
         num_desync_mote = 0
         desync_child_num = 0
+        desync_child_router_num = 0
         desync_router_num = 0
         # 각 코드의 개수를 저장하기 위한 딕셔너리 초기화
         code_count = {'Sync': 0, 'Joined': 0, 'RPL': 0, 'Cell_alloc': 0} 
@@ -1400,6 +1476,7 @@ def kpis_all(inputfile, subfolder):
                         code_count[code] += count
 
                 desync_child_num += motestats['desync_child_num']
+                desync_child_router_num += motestats['desync_child_router_num']
                 desync_router_num  += motestats['desync_router_num']
 
         # run_id별 코드 개수를 저장
@@ -1415,6 +1492,7 @@ def kpis_all(inputfile, subfolder):
         
         # 네트워크 전체에서 중계노드 디싱크로 인해 발생하는 자식 노드의 디싱크 횟수를 저장함
         desync_child_num_data.append(desync_child_num)
+        desync_child_router_num_data.append(desync_child_router_num)
         desync_router_num_data.append(desync_router_num)
 
     # 코드별 데이터를 모아 리스트로 변환
@@ -1431,6 +1509,7 @@ def kpis_all(inputfile, subfolder):
     avgStates['desync_code_rpl'] = calculate_stats(rpl_list)
     avgStates['desync_code_alloc'] = calculate_stats(cell_alloc_list)
     avgStates['desync_child_num_network'] = calculate_stats(desync_child_num_data)
+    avgStates['desync_child_router_num_network'] = calculate_stats(desync_child_router_num_data)
     avgStates['desync_router_num_network'] = calculate_stats(desync_router_num_data)
  #=========================================================================================================================
     # 네트워크에 싱크되어 있던 시간을 측정함
@@ -1476,14 +1555,81 @@ def kpis_all(inputfile, subfolder):
 
     avgStates['keep_alive_asn'] = calculate_stats(kp_num_avg_data)
  #=========================================================================================================================
+    kp_success_rate_avg_data = []
+
+    for run_id, per_mote_stats in allstats.items():
+        kp_success_rate_sum = 0
+        num_mote = 0
+        for mote_id, motestats in per_mote_stats.items():
+            if 'keep_alive_acked' in motestats:
+                if len(motestats['keep_alive_acked']) > 0:
+                    kp_success_rate_sum += sum(motestats['keep_alive_acked']) / len(motestats['keep_alive_acked'])
+                    num_mote += 1
+        
+        # 노드별 평균 전송 패킷 수 및 성공률을 구함
+        if num_mote > 0:
+            kp_success_rate_avg_data.append(kp_success_rate_sum / num_mote)
+    # 평균 데이터 계산 및 저장
+    avgStates['kp_success_rate_dedicate'] = calculate_stats(kp_success_rate_avg_data)
+ #=========================================================================================================================
+
+    auto_tx_kp_num_avg_data = []
+    auto_success_rate_kp_avg_data = []
+    auto_tx_jrq_num_avg_data = []
+    auto_success_rate_jrq_avg_data = []
+    auto_tx_6p_num_avg_data = []
+    auto_success_rate_6p_avg_data = []
+    # 토탈
     auto_tx_num_avg_data = []
     auto_success_rate_avg_data = []
 
     for run_id, per_mote_stats in allstats.items():
+        auto_tx_num_kp_sum = 0
+        auto_success_rate_kp_sum = 0
+        auto_tx_num_jrq_sum = 0
+        auto_success_rate_jrq_sum = 0
+        auto_tx_num_6p_sum = 0
+        auto_success_rate_6p_sum = 0
+        num_mote_kp = 0
+        num_mote_jrq = 0
+        num_mote_6p = 0
+    
         auto_tx_num_sum = 0
         auto_success_rate_sum = 0
         num_mote = 0
+
         for mote_id, motestats in per_mote_stats.items():
+            # KP 처리
+            if 'autonomous_tx_acked_kp' in motestats:
+                if len(motestats['autonomous_tx_acked_kp']) > 0:
+                    auto_tx_num_kp_sum += len(motestats['autonomous_tx_acked_kp'])
+                    
+                    # True인 값의 비율 계산 (KP)
+                    success_count_kp = sum(1 for acked in motestats['autonomous_tx_acked_kp'].values() if acked)
+                    auto_success_rate_kp_sum += success_count_kp / len(motestats['autonomous_tx_acked_kp'])
+                    num_mote_kp += 1
+
+            # JRQ 처리
+            if 'autonomous_tx_acked_jrq' in motestats:
+                if len(motestats['autonomous_tx_acked_jrq']) > 0:
+                    auto_tx_num_jrq_sum += len(motestats['autonomous_tx_acked_jrq'])
+                    
+                    # True인 값의 비율 계산 (JRQ)
+                    success_count_jrq = sum(1 for acked in motestats['autonomous_tx_acked_jrq'].values() if acked)
+                    auto_success_rate_jrq_sum += success_count_jrq / len(motestats['autonomous_tx_acked_jrq'])
+                    num_mote_jrq += 1
+
+            # 6P 처리
+            if 'autonomous_tx_acked_6p' in motestats:
+                if len(motestats['autonomous_tx_acked_6p']) > 0:
+                    auto_tx_num_6p_sum += len(motestats['autonomous_tx_acked_6p'])
+                    
+                    # True인 값의 비율 계산 (6P)
+                    success_count_6p = sum(1 for acked in motestats['autonomous_tx_acked_6p'].values() if acked)
+                    auto_success_rate_6p_sum += success_count_6p / len(motestats['autonomous_tx_acked_6p'])
+                    num_mote_6p += 1
+
+
             if 'autonomous_tx_acked' in motestats:
                 # autonomous_tx_acked의 길이가 0이 아닌 경우에만 처리
                 if len(motestats['autonomous_tx_acked']) > 0:
@@ -1496,14 +1642,161 @@ def kpis_all(inputfile, subfolder):
         if num_mote > 0:
             auto_tx_num_avg_data.append(auto_tx_num_sum / num_mote)
             auto_success_rate_avg_data.append(auto_success_rate_sum / num_mote)
-        else:
-            # 만약 모트가 하나도 없다면 0을 추가
-            auto_tx_num_avg_data.append(0)
-            auto_success_rate_avg_data.append(0)
+
+        # KP의 평균 전송 패킷 수 및 성공률 계산
+        if num_mote_kp > 0:
+            auto_tx_kp_num_avg_data.append(auto_tx_num_kp_sum / num_mote_kp)
+            auto_success_rate_kp_avg_data.append(auto_success_rate_kp_sum / num_mote_kp)
+
+        # JRQ의 평균 전송 패킷 수 및 성공률 계산
+        if num_mote_jrq > 0:
+            auto_tx_jrq_num_avg_data.append(auto_tx_num_jrq_sum / num_mote_jrq)
+            auto_success_rate_jrq_avg_data.append(auto_success_rate_jrq_sum / num_mote_jrq)
+
+        # 6P의 평균 전송 패킷 수 및 성공률 계산
+        if num_mote_6p > 0:
+            auto_tx_6p_num_avg_data.append(auto_tx_num_6p_sum / num_mote_6p)
+            auto_success_rate_6p_avg_data.append(auto_success_rate_6p_sum / num_mote_6p)
+
 
     # 평균 데이터 계산 및 저장
+    avgStates['auto_tx_kp_num_avg_data'] = calculate_stats(auto_tx_kp_num_avg_data)
+    avgStates['auto_success_rate_kp_avg_data'] = calculate_stats(auto_success_rate_kp_avg_data)
+    avgStates['auto_tx_jrq_num_avg_data'] = calculate_stats(auto_tx_jrq_num_avg_data)
+    avgStates['auto_success_rate_jrq_avg_data'] = calculate_stats(auto_success_rate_jrq_avg_data)
+    avgStates['auto_tx_6p_num_avg_data'] = calculate_stats(auto_tx_6p_num_avg_data)
+    avgStates['auto_success_rate_sixp_avg_data'] = calculate_stats(auto_success_rate_6p_avg_data)
     avgStates['auto_tx_num_avg_data'] = calculate_stats(auto_tx_num_avg_data)
     avgStates['auto_success_rate_avg_data'] = calculate_stats(auto_success_rate_avg_data)
+ #=========================================================================================================================
+
+    asn_group_size = 60000
+    all_run_avg_data = {
+        'asn_range': [],
+        'kp_success_rate': [],
+        'jrq_success_rate': [],
+        '6p_success_rate': []
+    }
+
+    # 모든 run에서 공통 ASN 범위 설정을 위해 ASN 범위를 계산하는 함수
+    def get_common_asn_ranges(per_mote_stats, asn_group_size):
+        max_asn = max([max(motestats.get('autonomous_tx_acked_kp', {}).keys(), default=0) for motestats in per_mote_stats.values()] +
+                    [max(motestats.get('autonomous_tx_acked_jrq', {}).keys(), default=0) for motestats in per_mote_stats.values()] +
+                    [max(motestats.get('autonomous_tx_acked_6p', {}).keys(), default=0) for motestats in per_mote_stats.values()])
+        total_groups = (max_asn // asn_group_size) + 1
+        asn_ranges = [f"{group * asn_group_size}-{(group + 1) * asn_group_size - 1}" for group in range(total_groups)]
+        return asn_ranges
+
+    with pd.ExcelWriter("asn_success_rate_all_runs_trgb.xlsx", engine='xlsxwriter') as writer:
+        common_asn_ranges = None
+
+        # 각 run에 대한 데이터를 처리
+        for run_id, per_mote_stats in allstats.items():
+            asn_success_rate_data = {
+                'asn_range': [],
+                'kp_success_rate': [],
+                'jrq_success_rate': [],
+                '6p_success_rate': []
+            }
+
+            # 공통 ASN 범위 설정 (첫 번째 run 기준)
+            if common_asn_ranges is None:
+                common_asn_ranges = get_common_asn_ranges(per_mote_stats, asn_group_size)
+                all_run_avg_data['asn_range'] = common_asn_ranges
+
+            # 기본값 None으로 모든 ASN 범위를 초기화
+            kp_success_data = {asn_range: None for asn_range in common_asn_ranges}
+            jrq_success_data = {asn_range: None for asn_range in common_asn_ranges}
+            _6p_success_data = {asn_range: None for asn_range in common_asn_ranges}
+
+            # 각 그룹에서 성공률 계산
+            for asn_range_str in common_asn_ranges:
+                asn_start, asn_end = map(int, asn_range_str.split('-'))
+
+                # 기본값 None으로 설정
+                kp_success = None
+                jrq_success = None
+                _6p_success = None
+
+                kp_count, jrq_count, _6p_count = 0, 0, 0  # 패킷 수
+
+                # KP 처리
+                for mote_id, motestats in per_mote_stats.items():
+                    if 'autonomous_tx_acked' in motestats:
+                        for asn, acked in motestats['autonomous_tx_acked_kp'].items():
+                            if asn_start <= asn <= asn_end:
+                                kp_count += 1
+                                kp_success = kp_success or 0  # None이면 0으로 초기화
+                                kp_success += acked  # acked는 True(1) 또는 False(0)
+
+                if kp_count > 0:
+                    kp_success_data[asn_range_str] = kp_success / kp_count  # 성공률 계산
+
+                # JRQ 처리
+                for mote_id, motestats in per_mote_stats.items():
+                    if 'autonomous_tx_acked_jrq' in motestats:
+                        for asn, acked in motestats['autonomous_tx_acked_jrq'].items():
+                            if asn_start <= asn <= asn_end:
+                                jrq_count += 1
+                                jrq_success = jrq_success or 0  # None이면 0으로 초기화
+                                jrq_success += acked
+
+                if jrq_count > 0:
+                    jrq_success_data[asn_range_str] = jrq_success / jrq_count  # 성공률 계산
+
+                # 6P 처리
+                for mote_id, motestats in per_mote_stats.items():
+                    if 'autonomous_tx_acked_6p' in motestats:
+                        for asn, acked in motestats['autonomous_tx_acked_6p'].items():
+                            if asn_start <= asn <= asn_end:
+                                _6p_count += 1
+                                _6p_success = _6p_success or 0  # None이면 0으로 초기화
+                                _6p_success += acked
+
+                if _6p_count > 0:
+                    _6p_success_data[asn_range_str] = _6p_success / _6p_count  # 성공률 계산
+
+            # 성공률 데이터 저장
+            asn_success_rate_data['asn_range'] = common_asn_ranges
+            asn_success_rate_data['kp_success_rate'] = [kp_success_data[asn] for asn in common_asn_ranges]
+            asn_success_rate_data['jrq_success_rate'] = [jrq_success_data[asn] for asn in common_asn_ranges]
+            asn_success_rate_data['6p_success_rate'] = [_6p_success_data[asn] for asn in common_asn_ranges]
+
+            # 각 run_id 데이터를 Excel에 저장
+            df = pd.DataFrame(asn_success_rate_data)
+            df.to_excel(writer, sheet_name=f'run_{run_id}', index=False)
+
+            # 평균 계산을 위한 데이터 저장
+            for i, asn_range in enumerate(common_asn_ranges):
+                kp_value = asn_success_rate_data['kp_success_rate'][i]
+                jrq_value = asn_success_rate_data['jrq_success_rate'][i]
+                _6p_value = asn_success_rate_data['6p_success_rate'][i]
+
+                all_run_avg_data['kp_success_rate'].append(kp_value)
+                all_run_avg_data['jrq_success_rate'].append(jrq_value)
+                all_run_avg_data['6p_success_rate'].append(_6p_value)
+
+        # 모든 run의 평균 데이터를 처리하여 마지막 시트에 저장
+        avg_df_data = {
+            'asn_range': all_run_avg_data['asn_range'],
+            'kp_success_rate': [],
+            'jrq_success_rate': [],
+            '6p_success_rate': []
+        }
+
+        # 평균 계산 (None 값은 제외하고 평균을 계산)
+        for i in range(len(common_asn_ranges)):
+            kp_values = [v for v in all_run_avg_data['kp_success_rate'][i::len(common_asn_ranges)] if v is not None]
+            jrq_values = [v for v in all_run_avg_data['jrq_success_rate'][i::len(common_asn_ranges)] if v is not None]
+            _6p_values = [v for v in all_run_avg_data['6p_success_rate'][i::len(common_asn_ranges)] if v is not None]
+
+            avg_df_data['kp_success_rate'].append(np.mean(kp_values) if kp_values else None)
+            avg_df_data['jrq_success_rate'].append(np.mean(jrq_values) if jrq_values else None)
+            avg_df_data['6p_success_rate'].append(np.mean(_6p_values) if _6p_values else None)
+
+        # 평균 데이터를 DataFrame으로 변환하여 저장
+        avg_df = pd.DataFrame(avg_df_data)
+        avg_df.to_excel(writer, sheet_name='average', index=False)
 
  #=========================================================================================================================
     # DIO의 rank 및 수신 횟수에 대해 조사
@@ -1825,6 +2118,94 @@ def kpis_all(inputfile, subfolder):
             df_sum.to_excel(writer, sheet_name='summary')
 
  #=========================================================================================================================
+    # 패킷 타입별로 평균 데이터를 저장할 변수
+    packet_type_avg_data = {}
+
+    # 각 run_id에 대해 모트별로 패킷 타입별 평균을 구함
+    for run_id, per_mote_stats in allstats.items():
+        for mote_id, motestats in per_mote_stats.items():
+            if 'packets_by_type_rx' in motestats:
+                for packet_type, packet_data in motestats['packets_by_type_rx'].items():
+                    
+                    # 패킷 타입별로 초기화
+                    if packet_type not in packet_type_avg_data:
+                        packet_type_avg_data[packet_type] = {
+                            'clock_source_avg_by_run': [],
+                            'non_clock_source_avg_by_run': []
+                        }
+                    
+                    # 클럭 소스 패킷 처리
+                    if len(packet_data['clock_source']) > 0:
+                        clock_source_avg = sum(packet_data['clock_source']) / len(packet_data['clock_source'])
+                        packet_type_avg_data[packet_type]['clock_source_avg_by_run'].append(clock_source_avg)
+
+                    # 비클럭 소스 패킷 처리
+                    if len(packet_data['non_clock_source']) > 0:
+                        non_clock_source_avg = sum(packet_data['non_clock_source']) / len(packet_data['non_clock_source'])
+                        packet_type_avg_data[packet_type]['non_clock_source_avg_by_run'].append(non_clock_source_avg)
+
+    # 각 패킷 타입별로 전체 run_id에 대한 통계를 calculate_stats로 계산
+    overall_packet_type_avg = {}
+
+    for packet_type, averages in packet_type_avg_data.items():
+        # 각 run_id의 클럭 소스 패킷 평균에 대한 통계 계산
+        if len(averages['clock_source_avg_by_run']) > 0:
+            clock_source_stats = calculate_stats(averages['clock_source_avg_by_run'])
+        else:
+            clock_source_stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+
+        # 각 run_id의 비클럭 소스 패킷 평균에 대한 통계 계산
+        if len(averages['non_clock_source_avg_by_run']) > 0:
+            non_clock_source_stats = calculate_stats(averages['non_clock_source_avg_by_run'])
+        else:
+            non_clock_source_stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+
+        # 결과를 저장
+        overall_packet_type_avg[packet_type] = {
+            'clock_source_stats': clock_source_stats,
+            'non_clock_source_stats': non_clock_source_stats
+        }
+
+    # 최종 결과를 avgStates에 저장
+    avgStates['packets_by_type_rx'] = overall_packet_type_avg
+    
+    #=========================================================================================================================
+    # 패킷 타입별로 통계 데이터를 저장할 변수
+    packet_type_tx_avg_data = {}
+
+    # 각 run_id에 대해 모트별로 패킷 타입별 통계를 구함
+    for run_id, per_mote_stats in allstats.items():
+        for mote_id, motestats in per_mote_stats.items():
+            if 'packets_by_type_tx' in motestats:
+                for packet_type, packet_data in motestats['packets_by_type_tx'].items():
+
+                    # 패킷 타입별로 초기화
+                    if packet_type not in packet_type_tx_avg_data:
+                        packet_type_tx_avg_data[packet_type] = {
+                            'asn_avg_by_run': []
+                        }
+
+                    # 패킷 타입에 대한 통계 계산
+                    if len(packet_data) > 0:
+                        packet_avg = sum(packet_data) / len(packet_data)
+                        packet_type_tx_avg_data[packet_type]['asn_avg_by_run'].append(packet_avg)
+
+    # 각 패킷 타입별 전체 run_id에 대한 통계 계산
+    overall_packet_type_tx_avg = {}
+
+    for packet_type, averages in packet_type_tx_avg_data.items():
+        # 각 run_id에 대한 평균, 표준 편차, 신뢰 구간 계산
+        if len(averages['asn_avg_by_run']) > 0:
+            stats = calculate_stats(averages['asn_avg_by_run'])
+        else:
+            stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+
+        # 결과를 저장
+        overall_packet_type_tx_avg[packet_type] = stats
+
+    # 최종 결과를 avgStates에 저장
+    avgStates['packets_by_type_tx'] = overall_packet_type_tx_avg
+
     # === remove unnecessary stats
 
     for (run_id, per_mote_stats) in list(allstats.items()):
