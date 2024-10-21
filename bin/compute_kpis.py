@@ -56,6 +56,7 @@ def init_mote():
         'join_time_s': None,
         'sync_asn': [],
         'rpl_asn' : None,
+        'rpl_asn_total' : [],
         'rpl_first_asn' : None,
         'rpl_parent_change_num' : None,
         'rpl_parent_change_num_total' : None,
@@ -89,8 +90,8 @@ def init_mote():
         'received_dio_rank_list_after_sync' : {},
         'desync_asn' : [],
         'desync_code' : {},
-        'desync_child_num' : 0,
-        'desync_child_router_num': 0,
+        'desync_child_ids' : [],
+        'desync_child_router_ids': [],
         'desync_router_num' : 0,
         'keep_alive_asn' : [],
         'keep_alive_acked' : [],
@@ -100,7 +101,8 @@ def init_mote():
         'autonomous_tx_acked' : [],
         'dio_tx_num' : {},
         'packets_by_type_tx' : {},
-        'packets_by_type_rx' : {}
+        'packets_by_type_rx' : {},
+        'add_cell_asn' : []
     }
 
 # =========================== KPIs ============================================
@@ -186,10 +188,10 @@ def kpis_all(inputfile, subfolder):
             allstats[run_id][mote_id]['desync_code'][code].append(asn)
 
             # 디싱크 시 중계 노드가 아닌 자식의 개수 저장
-            allstats[run_id][mote_id]['desync_child_num'] += len(child_ids)
+            allstats[run_id][mote_id]['desync_child_ids'].append(child_ids)
 
             # 디싱크 시 중계 노드인 아닌 자식의 개수 저장
-            allstats[run_id][mote_id]['desync_child_router_num'] += len(child_router_ids)
+            allstats[run_id][mote_id]['desync_child_router_ids'].append(child_router_ids)
 
             # 중계 노드의 Desync 횟수 저장
             if len(child_ids) != 0:
@@ -452,6 +454,7 @@ def kpis_all(inputfile, subfolder):
 
                 allstats[run_id][mote_id]['rpl_join'] = True
                 allstats[run_id][mote_id]['rpl_asn']  = asn
+                allstats[run_id][mote_id]['rpl_asn_total'].append(asn)
                 allstats[run_id][mote_id]['rpl_time_s'] = asn*file_settings['tsch_slotDuration']
                 allstats[run_id][mote_id]['rpl_parent_id'] = preferred_parent_id
 
@@ -602,6 +605,14 @@ def kpis_all(inputfile, subfolder):
             allstats[run_id][mote_id]['neighbor_rssi_sum'][minimal_cell_asn] = neighbor_rssi_sum
             allstats[run_id][mote_id]['network_nodes_num'][minimal_cell_asn] = network_nodes_num
             allstats[run_id][mote_id]['minimal_cell_chan_seq'][minimal_cell_asn] = minimal_cell_chan_seq
+        elif logline['_type'] == SimLog.LOG_TSCH_ADD_CELL['type']:
+
+            mote_id = logline['_mote_id']
+            cellOptions = logline['cellOptions']
+
+            if 'TX' in cellOptions and 'SHARED' not in cellOptions:
+                allstats[run_id][mote_id]['add_cell_asn'].append(asn)
+
     # === compute advanced motestats
 
     for (run_id, per_mote_stats) in list(allstats.items()):
@@ -1475,8 +1486,12 @@ def kpis_all(inputfile, subfolder):
                         count = len(desync_codes.get(code, []))
                         code_count[code] += count
 
-                desync_child_num += motestats['desync_child_num']
-                desync_child_router_num += motestats['desync_child_router_num']
+                for child_ids in motestats['desync_child_ids']:
+                    desync_child_num += len(child_ids)
+
+                for child_router_ids in motestats['desync_child_router_ids']:
+                    desync_child_router_num += len(child_router_ids)
+
                 desync_router_num  += motestats['desync_router_num']
 
         # run_id별 코드 개수를 저장
@@ -1827,42 +1842,42 @@ def kpis_all(inputfile, subfolder):
     avgStates['rpl_received_dio_rank_mean'] = calculate_stats(rpl_received_dio_rank_mean_data)
 
  #=========================================================================================================================
-    # 싱크 이후 DIO의 rank 및 수신 횟수에 대해 조사
-    rpl_received_dio_after_sync_rank_max_data = []
-    rpl_received_dio_after_sync_rank_min_data = []
-    rpl_received_dio_after_sync_rank_mean_data = []
-    rpl_received_dio_after_sync_ids_data = []
-    rpl_received_dio_after_sync_parent_dio_rank_data = []
+    # # 싱크 이후 DIO의 rank 및 수신 횟수에 대해 조사
+    # rpl_received_dio_after_sync_rank_max_data = []
+    # rpl_received_dio_after_sync_rank_min_data = []
+    # rpl_received_dio_after_sync_rank_mean_data = []
+    # rpl_received_dio_after_sync_ids_data = []
+    # rpl_received_dio_after_sync_parent_dio_rank_data = []
 
-    for run_id, per_mote_stats in allstats.items():
-        rank_max = 0
-        rank_min = 0
-        rank_mean = 0
-        parent_rank = 0
-        num_of_motes = 0
-        num_mote = 0
-        for mote_id, motestats in per_mote_stats.items():
-            if 'received_dio_rank_list_after_sync' in motestats and mote_id != 0:
-                rank_list = list(motestats['received_dio_rank_list_after_sync'].values())
-                if len(rank_list) != 0:
-                    rank_max += max(rank_list)
-                    rank_min += min(rank_list)
-                    rank_mean += sum(rank_list)/ len(rank_list)
-                    parent_rank += motestats['received_dio_rank_list_after_sync'][motestats['rpl_parent_id']]
-                    num_of_motes += len(rank_list)
-                    num_mote += 1
+    # for run_id, per_mote_stats in allstats.items():
+    #     rank_max = 0
+    #     rank_min = 0
+    #     rank_mean = 0
+    #     parent_rank = 0
+    #     num_of_motes = 0
+    #     num_mote = 0
+    #     for mote_id, motestats in per_mote_stats.items():
+    #         if 'received_dio_rank_list_after_sync' in motestats and mote_id != 0:
+    #             rank_list = list(motestats['received_dio_rank_list_after_sync'].values())
+    #             if len(rank_list) != 0:
+    #                 rank_max += max(rank_list)
+    #                 rank_min += min(rank_list)
+    #                 rank_mean += sum(rank_list)/ len(rank_list)
+    #                 parent_rank += motestats['received_dio_rank_list_after_sync'][motestats['rpl_parent_id']]
+    #                 num_of_motes += len(rank_list)
+    #                 num_mote += 1
 
-        rpl_received_dio_after_sync_rank_max_data.append(rank_max/num_mote)
-        rpl_received_dio_after_sync_rank_min_data.append(rank_min/num_mote)
-        rpl_received_dio_after_sync_rank_mean_data.append(rank_mean/num_mote)
-        rpl_received_dio_after_sync_ids_data.append(num_of_motes/num_mote)
-        rpl_received_dio_after_sync_parent_dio_rank_data.append(parent_rank/num_mote)
+    #     rpl_received_dio_after_sync_rank_max_data.append(rank_max/num_mote)
+    #     rpl_received_dio_after_sync_rank_min_data.append(rank_min/num_mote)
+    #     rpl_received_dio_after_sync_rank_mean_data.append(rank_mean/num_mote)
+    #     rpl_received_dio_after_sync_ids_data.append(num_of_motes/num_mote)
+    #     rpl_received_dio_after_sync_parent_dio_rank_data.append(parent_rank/num_mote)
 
-    avgStates['rpl_received_dio_after_sync_rank_max'] = calculate_stats(rpl_received_dio_after_sync_rank_max_data)
-    avgStates['rpl_received_dio_after_sync_rank_min'] = calculate_stats(rpl_received_dio_after_sync_rank_min_data)
-    avgStates['rpl_received_dio_after_sync_rank_mean'] = calculate_stats(rpl_received_dio_after_sync_rank_mean_data)
-    avgStates['rpl_received_dio_after_sync_ids'] = calculate_stats(rpl_received_dio_after_sync_ids_data)
-    avgStates['rpl_received_dio_after_sync_parent_dio_rank'] = calculate_stats(rpl_received_dio_after_sync_parent_dio_rank_data)
+    # avgStates['rpl_received_dio_after_sync_rank_max'] = calculate_stats(rpl_received_dio_after_sync_rank_max_data)
+    # avgStates['rpl_received_dio_after_sync_rank_min'] = calculate_stats(rpl_received_dio_after_sync_rank_min_data)
+    # avgStates['rpl_received_dio_after_sync_rank_mean'] = calculate_stats(rpl_received_dio_after_sync_rank_mean_data)
+    # avgStates['rpl_received_dio_after_sync_ids'] = calculate_stats(rpl_received_dio_after_sync_ids_data)
+    # avgStates['rpl_received_dio_after_sync_parent_dio_rank'] = calculate_stats(rpl_received_dio_after_sync_parent_dio_rank_data)
 
  #=========================================================================================================================
     # 노드 별 마지막 선호 부모 선택 ASN의 분산도를 확인한다
@@ -2117,96 +2132,537 @@ def kpis_all(inputfile, subfolder):
 
             df_sum.to_excel(writer, sheet_name='summary')
 
- #=========================================================================================================================
-    # 패킷 타입별로 평균 데이터를 저장할 변수
-    packet_type_avg_data = {}
+#=========================================================================================================================
+        # 패킷 타입별로 전송된 패킷 개수를 저장할 변수 (네트워크 단위)
+        packet_type_tx_count_data = {}
 
-    # 각 run_id에 대해 모트별로 패킷 타입별 평균을 구함
+        # 각 run_id에 대해 네트워크 전체의 패킷 타입별 전송 데이터를 합산
+        for run_id, per_mote_stats in allstats.items():
+            # 각 run_id에 대한 패킷 전송 총합 계산을 위해 초기화
+            total_packet_tx_by_run = {}
+
+            for mote_id, motestats in per_mote_stats.items():
+                if 'packets_by_type_rx' in motestats:
+                    for packet_type, packet_data in motestats['packets_by_type_rx'].items():
+
+                        # 패킷 타입별로 초기화
+                        if packet_type not in total_packet_tx_by_run:
+                            total_packet_tx_by_run[packet_type] = {
+                                'clock_source_rx': 0,
+                                'non_clock_source_rx': 0
+                            }
+
+                        # 각 모트의 클럭 소스와 비클럭 소스 패킷 개수를 네트워크 차원에서 합산
+                        total_packet_tx_by_run[packet_type]['clock_source_rx'] += len(packet_data['clock_source'])
+                        total_packet_tx_by_run[packet_type]['non_clock_source_rx'] += len(packet_data['non_clock_source'])
+
+            # 각 run_id에 대한 네트워크 전체 패킷 수 저장
+            for packet_type, tx_counts in total_packet_tx_by_run.items():
+                # 패킷 타입별로 리스트 초기화
+                if packet_type not in packet_type_tx_count_data:
+                    packet_type_tx_count_data[packet_type] = {
+                        'clock_source_rx_by_run': [],
+                        'non_clock_source_rx_by_run': []
+                    }
+
+                # 각 run_id의 전체 네트워크에서 전송된 패킷 수를 리스트에 저장
+                packet_type_tx_count_data[packet_type]['clock_source_rx_by_run'].append(tx_counts['clock_source_rx'])
+                packet_type_tx_count_data[packet_type]['non_clock_source_rx_by_run'].append(tx_counts['non_clock_source_rx'])
+
+        # 각 패킷 타입별로 전체 run_id에 대한 통계를 calculate_stats로 계산
+        overall_packet_type_tx_count_stats = {}
+
+        for packet_type, tx_counts in packet_type_tx_count_data.items():
+            # 각 run_id의 클럭 소스 패킷 개수에 대한 통계 계산
+            if len(tx_counts['clock_source_rx_by_run']) > 0:
+                clock_source_stats = calculate_stats(tx_counts['clock_source_rx_by_run'])
+            else:
+                clock_source_stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+
+            # 각 run_id의 비클럭 소스 패킷 개수에 대한 통계 계산
+            if len(tx_counts['non_clock_source_rx_by_run']) > 0:
+                non_clock_source_stats = calculate_stats(tx_counts['non_clock_source_rx_by_run'])
+            else:
+                non_clock_source_stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+
+            # 결과를 저장
+            overall_packet_type_tx_count_stats[packet_type] = {
+                'clock_source_stats': clock_source_stats,
+                'non_clock_source_stats': non_clock_source_stats
+            }
+
+        # 최종 결과를 avgStates에 저장
+        avgStates['packets_by_type_rx_count_network'] = overall_packet_type_tx_count_stats
+    #=========================================================================================================================
+    # 모든 패킷 타입에 대해 클럭 소스로부터 수신한 ASN 리스트를 만들고, 인터벌을 계산하는 코드
+    clock_packet_rx_asn_list = {}
+    eb_packet_rx_asn_list = {}  # EB 패킷에 대한 ASN 리스트 저장
+    dio_packet_rx_asn_list = {}  # DIO 패킷에 대한 ASN 리스트 저장
+
+    # 각 run_id에 대해 모트별로 수신된 패킷의 ASN 리스트를 수집
     for run_id, per_mote_stats in allstats.items():
+        # 각 모트별로 초기화
+        clock_packet_rx_asn_list[run_id] = {}
+        eb_packet_rx_asn_list[run_id] = {}
+        dio_packet_rx_asn_list[run_id] = {}
+
         for mote_id, motestats in per_mote_stats.items():
             if 'packets_by_type_rx' in motestats:
+                # 모든 패킷 타입에 대해 반복
                 for packet_type, packet_data in motestats['packets_by_type_rx'].items():
-                    
-                    # 패킷 타입별로 초기화
-                    if packet_type not in packet_type_avg_data:
-                        packet_type_avg_data[packet_type] = {
-                            'clock_source_avg_by_run': [],
-                            'non_clock_source_avg_by_run': []
-                        }
-                    
-                    # 클럭 소스 패킷 처리
-                    if len(packet_data['clock_source']) > 0:
-                        clock_source_avg = sum(packet_data['clock_source']) / len(packet_data['clock_source'])
-                        packet_type_avg_data[packet_type]['clock_source_avg_by_run'].append(clock_source_avg)
+                    # 클럭 소스에서 수신한 패킷 필터링 (전체 ASN 수집)
+                    if 'clock_source' in packet_data and len(packet_data['clock_source']) > 0:
+                        if mote_id not in clock_packet_rx_asn_list[run_id]:
+                            clock_packet_rx_asn_list[run_id][mote_id] = []
+                        clock_packet_rx_asn_list[run_id][mote_id].extend(packet_data['clock_source'])
+                    # EB 패킷에 대해 ASN 수집
+                    if packet_type == d.PKT_TYPE_EB and len(packet_data['clock_source']) > 0:
+                        if mote_id not in eb_packet_rx_asn_list[run_id]:
+                            eb_packet_rx_asn_list[run_id][mote_id] = []
+                        eb_packet_rx_asn_list[run_id][mote_id].extend(packet_data['clock_source'])
+                           
+                    # DIO 패킷에 대해 ASN 수집
+                    if packet_type == d.PKT_TYPE_DIO and len(packet_data['clock_source']) > 0:
+                        if mote_id not in dio_packet_rx_asn_list[run_id]:
+                            dio_packet_rx_asn_list[run_id][mote_id] = []
+                        dio_packet_rx_asn_list[run_id][mote_id].extend(packet_data['clock_source'])
+            
 
-                    # 비클럭 소스 패킷 처리
-                    if len(packet_data['non_clock_source']) > 0:
-                        non_clock_source_avg = sum(packet_data['non_clock_source']) / len(packet_data['non_clock_source'])
-                        packet_type_avg_data[packet_type]['non_clock_source_avg_by_run'].append(non_clock_source_avg)
+    # 인터벌 계산 및 run_id 별로 저장
+    clock_packet_rx_intervals = {}
+    eb_packet_rx_intervals = {}
+    dio_packet_rx_intervals = {}
 
-    # 각 패킷 타입별로 전체 run_id에 대한 통계를 calculate_stats로 계산
-    overall_packet_type_avg = {}
+    for run_id in clock_packet_rx_asn_list:
+        clock_packet_rx_intervals[run_id] = {}
+        eb_packet_rx_intervals[run_id] = {}
+        dio_packet_rx_intervals[run_id] = {}
 
-    for packet_type, averages in packet_type_avg_data.items():
-        # 각 run_id의 클럭 소스 패킷 평균에 대한 통계 계산
-        if len(averages['clock_source_avg_by_run']) > 0:
-            clock_source_stats = calculate_stats(averages['clock_source_avg_by_run'])
-        else:
-            clock_source_stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+        for mote_id, asn_list in clock_packet_rx_asn_list[run_id].items():
+            if len(asn_list) > 1:
+                asn_list =   sorted(asn_list)
+                intervals = [asn_list[i + 1] - asn_list[i] for i in range(len(asn_list) - 1)]
+                clock_packet_rx_intervals[run_id][mote_id] = intervals
 
-        # 각 run_id의 비클럭 소스 패킷 평균에 대한 통계 계산
-        if len(averages['non_clock_source_avg_by_run']) > 0:
-            non_clock_source_stats = calculate_stats(averages['non_clock_source_avg_by_run'])
-        else:
-            non_clock_source_stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
+        for mote_id, eb_asn_list in eb_packet_rx_asn_list[run_id].items():
+            if len(eb_asn_list) > 1:
+                eb_asn_list = sorted(eb_asn_list)
+                eb_intervals = [eb_asn_list[i + 1] - eb_asn_list[i] for i in range(len(eb_asn_list) - 1)]
+                eb_packet_rx_intervals[run_id][mote_id] = eb_intervals
 
-        # 결과를 저장
-        overall_packet_type_avg[packet_type] = {
-            'clock_source_stats': clock_source_stats,
-            'non_clock_source_stats': non_clock_source_stats
-        }
+        for mote_id, dio_asn_list in dio_packet_rx_asn_list[run_id].items():
+            if len(dio_asn_list) > 1:
+                dio_asn_list = sorted(dio_asn_list)
+                dio_intervals = [dio_asn_list[i + 1] - dio_asn_list[i] for i in range(len(dio_asn_list) - 1)]
+                dio_packet_rx_intervals[run_id][mote_id] = dio_intervals
 
-    # 최종 결과를 avgStates에 저장
-    avgStates['packets_by_type_rx'] = overall_packet_type_avg
-    
-    #=========================================================================================================================
-    # 패킷 타입별로 통계 데이터를 저장할 변수
+    # 모트별 평균을 구한 후, run_id 별 평균을 구하고 그 결과를 다시 전체 run_id 에 대해 평균 계산
+    clock_avg_intervals_per_run = {}
+    eb_avg_intervals_per_run = {}
+    dio_avg_intervals_per_run = {}
+
+    for run_id in clock_packet_rx_intervals:
+        clock_avg_intervals_per_run[run_id] = []
+        eb_avg_intervals_per_run[run_id] = []
+        dio_avg_intervals_per_run[run_id] = []
+
+        # 모트별로 평균 주기 계산
+        for mote_id, intervals in clock_packet_rx_intervals[run_id].items():
+            if len(intervals) > 0:
+                clock_avg_intervals_per_run[run_id].append(sum(intervals) / len(intervals))
+
+        for mote_id, eb_intervals in eb_packet_rx_intervals[run_id].items():
+            if len(eb_intervals) > 0:
+                eb_avg_intervals_per_run[run_id].append(sum(eb_intervals) / len(eb_intervals))
+
+        for mote_id, dio_intervals in dio_packet_rx_intervals[run_id].items():
+            if len(dio_intervals) > 0:
+                dio_avg_intervals_per_run[run_id].append(sum(dio_intervals) / len(dio_intervals))
+
+    # 각 run_id 의 평균 주기를 다시 전체 run_id에 대해 통계 계산
+    final_clock_avg_intervals = [sum(values) / len(values) for values in clock_avg_intervals_per_run.values() if len(values) > 0]
+    final_eb_avg_intervals = [sum(values) / len(values) for values in eb_avg_intervals_per_run.values() if len(values) > 0]
+    final_dio_avg_intervals = [sum(values) / len(values) for values in dio_avg_intervals_per_run.values() if len(values) > 0]
+
+    # calculate_stats를 사용해 최종 결과 계산
+    if final_clock_avg_intervals:
+        avgStates['clock_source_rx_avg_interval'] = calculate_stats(final_clock_avg_intervals)
+
+    if final_eb_avg_intervals:
+        avgStates['clock_source_eb_rx_avg_interval'] = calculate_stats(final_eb_avg_intervals)
+
+    if final_dio_avg_intervals:
+        avgStates['clock_source_dio_rx_avg_interval'] = calculate_stats(final_dio_avg_intervals)
+
+#=========================================================================================================================
+
+    # 패킷 타입별로 통계 데이터를 저장할 변수 (전체 네트워크 단위로)
     packet_type_tx_avg_data = {}
 
-    # 각 run_id에 대해 모트별로 패킷 타입별 통계를 구함
+    # 각 run_id에 대해 네트워크 전체의 패킷 타입별 전송 데이터를 합산
     for run_id, per_mote_stats in allstats.items():
+        # 각 run_id에 대한 패킷 전송 총합 계산을 위해 초기화
+        total_packet_tx_by_run = {}
+
         for mote_id, motestats in per_mote_stats.items():
             if 'packets_by_type_tx' in motestats:
                 for packet_type, packet_data in motestats['packets_by_type_tx'].items():
 
-                    # 패킷 타입별로 초기화
-                    if packet_type not in packet_type_tx_avg_data:
-                        packet_type_tx_avg_data[packet_type] = {
-                            'asn_avg_by_run': []
-                        }
+                    # 패킷 타입별로 초기화 (전체 run_id를 합산)
+                    if packet_type not in total_packet_tx_by_run:
+                        total_packet_tx_by_run[packet_type] = 0
 
-                    # 패킷 타입에 대한 통계 계산
-                    if len(packet_data) > 0:
-                        packet_avg = sum(packet_data) / len(packet_data)
-                        packet_type_tx_avg_data[packet_type]['asn_avg_by_run'].append(packet_avg)
+                    # 각 모트의 패킷 수를 네트워크 차원에서 합산
+                    total_packet_tx_by_run[packet_type] += len(packet_data)
 
-    # 각 패킷 타입별 전체 run_id에 대한 통계 계산
+        # 각 run_id에 대한 전체 네트워크 패킷 수 저장
+        for packet_type, total_packets in total_packet_tx_by_run.items():
+            # 패킷 타입별로 리스트 초기화
+            if packet_type not in packet_type_tx_avg_data:
+                packet_type_tx_avg_data[packet_type] = {
+                    'packet_tx_num_by_run': []
+                }
+
+            # run_id별 전체 네트워크에서 전송된 패킷 수를 리스트에 저장
+            packet_type_tx_avg_data[packet_type]['packet_tx_num_by_run'].append(total_packets)
+
+    # 각 패킷 타입별로 전체 네트워크에 대한 통계 계산
     overall_packet_type_tx_avg = {}
 
-    for packet_type, averages in packet_type_tx_avg_data.items():
-        # 각 run_id에 대한 평균, 표준 편차, 신뢰 구간 계산
-        if len(averages['asn_avg_by_run']) > 0:
-            stats = calculate_stats(averages['asn_avg_by_run'])
+    for packet_type, data in packet_type_tx_avg_data.items():
+        # 각 패킷 타입별로 run_id 단위로 전송된 패킷 수에 대한 통계 계산
+        if len(data['packet_tx_num_by_run']) > 0:
+            stats = calculate_stats(data['packet_tx_num_by_run'])  # 평균, 표준 편차, 신뢰 구간 계산
         else:
             stats = {'mean': None, 'std_dev': None, 'margin_of_error': None}
 
-        # 결과를 저장
+        # 전체 패킷 타입에 대한 결과 저장
         overall_packet_type_tx_avg[packet_type] = stats
 
     # 최종 결과를 avgStates에 저장
-    avgStates['packets_by_type_tx'] = overall_packet_type_tx_avg
+    avgStates['packets_by_type_tx_network'] = overall_packet_type_tx_avg
+#=========================================================================================================================
+    # 중복 체크 및 병합 함수 (완전 겹치거나 부분 겹치는 경우 처리)
+    def merge_and_remove_overlaps(periods):
+        # 우선 시작점 순으로 정렬
+        periods.sort(key=lambda x: x['start'])
 
-    # === remove unnecessary stats
+        merged = []
+        for current in periods:
+            if not merged:
+                merged.append(current)
+            else:
+                last = merged[-1]
+                # 두 기간이 겹치는 경우: 부분적으로든 완전히 겹치든
+                if last['end'] >= current['start']:
+                    # 겹치는 경우에는 시작점은 last['start'], 끝점은 더 큰 값으로 병합
+                    last['end'] = max(last['end'], current['end'])
+                else:
+                    merged.append(current)
+        return merged
+    
+    # 세 가지 리스트를 병합하고 중복을 제거하는 함수
+    def merge_all_periods(mote_id):
+        # 세 가지 리스트에서 구간을 가져오기
+        periods = []
+        
+        # rpl_only_between_sync_and_addcell 리스트에서 기간 가져오기
+        if mote_id in rpl_only_between_sync_and_addcell:
+            periods.extend(rpl_only_between_sync_and_addcell[mote_id])
+
+        # rpl_followed_by_addcell_or_desync 리스트에서 기간 가져오기
+        if mote_id in rpl_followed_by_addcell_or_desync:
+            periods.extend(rpl_followed_by_addcell_or_desync[mote_id])
+
+        # sync_followed_by_desync 리스트에서 기간 가져오기
+        if mote_id in sync_followed_by_desync:
+            periods.extend(sync_followed_by_desync[mote_id])
+
+        # 중복된 기간을 병합
+        merged_periods = merge_and_remove_overlaps(periods)
+        
+        return merged_periods
+
+    non_nego_periods_by_mote_by_run = {}
+    sorted_sync_desync_events_by_run = {}
+    for run_id, per_mote_stats in allstats.items():     
+        sorted_events_by_mote = {}  # 모트별 정렬된 이벤트 저장
+        sorted_sync_desync_events_by_mote = {}  # 싱크 디싱크 이벤트만 저장
+        rpl_only_between_sync_and_addcell = {}  # sync와 add셀 사이에 rpl만 있는 케이스 저장
+        rpl_followed_by_addcell_or_desync = {}  # rpl 뒤에 add_cell 또는 desync가 오는 케이스 저장
+        sync_followed_by_desync = {}  # sync 뒤에  desync가 오는 케이스 저장
+
+        for mote_id, motestats in per_mote_stats.items():
+
+            # 싱크, 디싱크, 부모 선정, 셀 할당 ASN 리스트들 (여러 번 발생 가능)
+            sync_asn_list = motestats.get('sync_asn', [])
+            desync_asn_list = motestats.get('desync_asn', [])
+            rpl_asn_list = motestats.get('rpl_asn_total', [])
+            add_cell_asn_list = motestats.get('add_cell_asn', [])
+
+            # 이벤트 리스트 생성
+            events = []
+            events += [{'type': 'sync', 'asn': asn} for asn in sync_asn_list]
+            events += [{'type': 'desync', 'asn': asn} for asn in desync_asn_list]
+            events += [{'type': 'rpl', 'asn': asn} for asn in rpl_asn_list]
+            events += [{'type': 'add_cell', 'asn': asn} for asn in add_cell_asn_list]
+
+            sync_desync_events = []
+            sync_desync_events += [{'type': 'sync', 'asn': asn} for asn in sync_asn_list]
+            sync_desync_events += [{'type': 'desync', 'asn': asn} for asn in desync_asn_list]
+
+            # ASN 기준으로 정렬
+            events.sort(key=lambda x: x['asn'])
+            sync_desync_events.sort(key=lambda x: x['asn'])
+
+            # 정렬된 이벤트 저장
+            sorted_events_by_mote[mote_id] = events
+            sorted_sync_desync_events_by_mote[mote_id] = sync_desync_events
+            
+            # 1. rpl만 sync와 add셀 사이에 있는 경우 찾기
+            sync_index = None
+            for i, event in enumerate(events):
+                if event['type'] == 'sync':
+                    sync_index = i  # sync 이벤트 발생 지점 기록
+                elif sync_index is not None and event['type'] == 'add_cell':
+                    # sync 이후 add셀 이벤트 발생 시점에 rpl만 있는지 확인
+                    if all(e['type'] == 'rpl' for e in events[sync_index + 1:i]):
+                        # rpl_only_between_sync_and_addcell 리스트에 저장
+                        rpl_only_between_sync_and_addcell.setdefault(mote_id, []).append({
+                            'start': events[sync_index]['asn'],
+                            'end': event['asn']
+                        })
+                    sync_index = None  # sync와 add셀 사이 확인 후 초기화
+            # 2. rpl 뒤에 바로 add_cell 또는 desync가 오는 경우 찾기
+            for i in range(len(events) - 1):
+                current_event = events[i]
+                next_event = events[i + 1]
+                
+                # rpl 이벤트가 있고, 다음에 add_cell 또는 desync가 오는 경우
+                if current_event['type'] == 'rpl' and next_event['type'] in ['add_cell', 'desync']:
+                    # rpl_followed_by_addcell_or_desync 리스트에 저장
+                    rpl_followed_by_addcell_or_desync.setdefault(mote_id, []).append({
+                        'start': current_event['asn'],
+                        'end': next_event['asn']
+                    })
+
+            # 3. sync 뒤에 바로 desync
+            for i in range(len(events) - 1):
+                current_event = events[i]
+                next_event = events[i + 1]
+                
+                # sync 이벤트가 있고, 다음에  desync가 오는 경우
+                if current_event['type'] == 'sync' and next_event['type'] in ['desync']:
+                    # sync_followed_by_desync 리스트에 저장
+                    sync_followed_by_desync.setdefault(mote_id, []).append({
+                        'start': current_event['asn'],
+                        'end': next_event['asn']
+                    })
+
+        non_nego_periods_by_mote = {}
+
+        for mote_id in rpl_only_between_sync_and_addcell.keys() | rpl_followed_by_addcell_or_desync.keys() | sync_followed_by_desync.keys():
+            # 세 리스트를 병합하고 중복을 제거
+            merged_periods = merge_all_periods(mote_id)
+            non_nego_periods_by_mote[mote_id] = merged_periods
+
+
+        non_nego_periods_by_mote_by_run[run_id] = non_nego_periods_by_mote
+        sorted_sync_desync_events_by_run[run_id] = sorted_sync_desync_events_by_mote
+
+    # 중복 체크 및 구간 제거 함수
+    def subtract_periods(sync_periods, non_nego_periods):
+        result = []
+        for sync_period in sync_periods:
+            start = sync_period['start']
+            end = sync_period['end']
+            for non_nego_period in non_nego_periods:
+                if non_nego_period['start'] <= end and non_nego_period['end'] >= start:  # 구간이 겹치는 경우
+                    if non_nego_period['start'] > start:
+                        result.append({'start': start, 'end': non_nego_period['start'] - 1})
+                    start = max(non_nego_period['end'] + 1, start)
+            if start <= end:  # 남은 부분이 있을 경우
+                result.append({'start': start, 'end': end})
+        return result
+
+    # 각 run_id에 대해 협상 셀 구간 계산
+    nego_periods_by_mote_by_run = {}
+
+    for run_id, non_nego_periods_by_mote in non_nego_periods_by_mote_by_run.items():
+        nego_periods_by_mote = {}
+        # 시뮬레이션 종료 ASN 계산
+        sim_end_asn = file_settings['exec_numSlotframesPerRun'] * file_settings['tsch_slotframeLength']
+        
+        for mote_id, sync_desync_events in sorted_sync_desync_events_by_run[run_id].items():
+            # 싱크-디싱크 구간 만들기
+            sync_periods = []
+            sync_start = None
+            for event in sync_desync_events:
+                if event['type'] == 'sync':
+                    sync_start = event['asn']  # 싱크 시작점 기록
+                elif event['type'] == 'desync' and sync_start is not None:
+                    sync_periods.append({'start': sync_start, 'end': event['asn']})  # 싱크-디싱크 구간 저장
+                    sync_start = None
+
+            # 마지막 싱크 후 디싱크가 없으면 시뮬레이션 종료까지 싱크 상태로 유지
+            if sync_start is not None:
+                sync_periods.append({'start': sync_start, 'end': sim_end_asn})
+
+            # non_nego 구간 가져오기
+            non_nego_periods = non_nego_periods_by_mote.get(mote_id, [])
+
+            # 싱크-디싱크 구간에서 non_nego 구간을 제거하여 협상 구간 계산
+            nego_periods = subtract_periods(sync_periods, non_nego_periods)
+            nego_periods_by_mote[mote_id] = nego_periods
+
+        # 각 run_id에 대해 협상 구간 저장
+        nego_periods_by_mote_by_run[run_id] = nego_periods_by_mote
+
+#========================================전처리===============================================
+
+    # 클럭 소스로부터 weak_period 동안 수신한 패킷 수의 평균을 계산하기 위한 데이터 저장
+    packets_in_weak_period_data_by_type = {}
+    total_weak_period_data = []
+
+    # 각 run_id에 대해 네트워크 전체의 패킷 타입별 전송 데이터를 합산
+    for run_id, per_mote_stats in allstats.items():
+        # 각 run_id에 대한 패킷 전송 총합 계산을 위해 초기화
+        total_packet_tx_by_run = {}
+        total_weak_period = 0
+        non_nego_periods_by_mote = non_nego_periods_by_mote_by_run[run_id]
+        # 각 패킷 타입에 대해 weak_period 동안 받은 패킷 수를 저장하기 위한 구조 초기화
+        for mote_id, motestats in per_mote_stats.items():
+            if 'packets_by_type_rx' in motestats:
+
+                weak_period = non_nego_periods_by_mote.get(mote_id, [])
+
+                # 약한 기간(weak period)의 총 ASN 개수 계산
+                total_weak_period += sum(period['end'] - period['start'] + 1 for period in weak_period)
+
+                for packet_type, packet_data in motestats['packets_by_type_rx'].items():
+                    # 각 패킷 타입별로 평균 계산을 위한 초기화
+                    if packet_type not in total_packet_tx_by_run:
+                        total_packet_tx_by_run[packet_type] = 0
+
+                    if packet_type not in packets_in_weak_period_data_by_type:
+                        packets_in_weak_period_data_by_type[packet_type] = []
+
+                    # 각 모트의 클럭 소스에서 받은 패킷의 ASN을 확인하여 기간 내에 있는지 검사
+                    for asn in packet_data['clock_source']:
+                        for period in weak_period:
+                            if period['start'] <= asn <= period['end']:  # ASN이 weak period에 있을 때
+                                total_packet_tx_by_run[packet_type] += 1
+                                break  # 기간 내에 속한 패킷이 확인되면 다음 ASN 확인
+
+        # 패킷 타입별로 받은 패킷 수를 저장
+        for packet_type, count in total_packet_tx_by_run.items():
+            packets_in_weak_period_data_by_type[packet_type].append(count)
+
+        # 전체 약한 기간에 대한 데이터 저장 (전체 weak_period 동안의 ASN 개수)
+        total_weak_period_data.append(total_weak_period)
+
+    # 패킷 타입별로 weak period 동안 수신된 패킷의 평균 계산
+    avgStates['weak_period_network'] = calculate_stats(total_weak_period_data)
+
+    # 각 패킷 타입별 통계 계산 및 저장
+    for packet_type, packet_counts in packets_in_weak_period_data_by_type.items():
+        avgStates[f'packets_in_weak_period_network_{packet_type}'] = calculate_stats(packet_counts)
+
+ #========================================================================================================================
+    # 데이터 초기화
+    desync_nego_child_num_data = []  # 부모가 디싱크될 때 자식 노드가 협상 셀이 있는 기간에 있는 경우
+    desync_non_nego_child_num_data = []  # 부모가 디싱크될 때 자식 노드가 협상 셀이 없는 기간에 있는 경우
+    desync_nego_child_router_num_data = []  # 부모가 디싱크될 때 자식 라우터 노드가 협상 셀이 있는 기간에 있는 경우
+    desync_non_nego_child_router_num_data = []  # 부모가 디싱크될 때 자식 라우터 노드가 협상 셀이 없는 기간에 있는 경우
+
+    # 모든 run_id에 대해 데이터를 처리
+    for run_id, per_mote_stats in allstats.items():
+        desync_nego_child_num = 0
+        desync_non_nego_child_num = 0
+        desync_nego_child_router_num = 0
+        desync_non_nego_child_router_num = 0
+
+        # 해당 run_id의 협상 셀이 있는 기간과 없는 기간 가져오기
+        nego_periods_by_mote = nego_periods_by_mote_by_run.get(run_id, {})
+        non_nego_periods_by_mote = non_nego_periods_by_mote_by_run.get(run_id, {})
+
+        # 각 mote에 대한 데이터를 처리
+        for mote_id, motestats in per_mote_stats.items():
+
+            if 'desync_asn' in motestats:
+                # 부모 모트의 디싱크 ASN
+                desync_asn_list = motestats['desync_asn']
+
+                # 자식 노드 ID 리스트 가져오기 (개별 자식 노드 ID로 처리)
+                child_ids_per_asn = motestats.get('desync_child_ids', [])
+                child_router_ids_per_asn = motestats.get('desync_child_router_ids', [])
+                
+                # 부모 모트가 디싱크될 때 자식들의 상태를 확인
+                for index, asn in enumerate(desync_asn_list):
+                    # 자식 노드 리스트가 있는지 확인하고, 해당 인덱스의 자식 노드를 가져옴
+                    child_ids = child_ids_per_asn[index] if index < len(child_ids_per_asn) else []
+                    child_router_ids = child_router_ids_per_asn[index] if index < len(child_router_ids_per_asn) else []
+
+                    # 디싱크 후 1750 ASN 이내의 범위 확인
+                    asn_end = asn + 1750
+
+                    # 자식 노드가 있는 경우 처리
+                    if child_ids:
+                        for child_id in child_ids:
+                            # 자식 노드의 디싱크 ASN 리스트 가져오기
+                            child_desync_asns = per_mote_stats.get(child_id, {}).get('desync_asn', [])
+
+                            # 자식 노드가 디싱크된 ASN이 1750 ASN 내에 있는지 확인
+                            for child_asn in child_desync_asns:
+                                if asn <= child_asn <= asn_end:
+                                    # 자식 노드의 협상 셀 기간과 상태를 확인
+                                    child_nego_periods = nego_periods_by_mote.get(child_id, [])
+                                    child_non_nego_periods = non_nego_periods_by_mote.get(child_id, [])
+
+                                    # 자식 노드가 협상 셀이 있는 기간에 있는지 확인
+                                    if any(period['start'] <= child_asn <= period['end'] for period in child_nego_periods):
+                                        desync_nego_child_num += 1
+                                    # 자식 노드가 협상 셀이 없는 기간에 있는지 확인
+                                    elif any(period['start'] <= child_asn <= period['end'] for period in child_non_nego_periods):
+                                        desync_non_nego_child_num += 1
+
+                    # 자식 라우터 노드가 있는 경우 처리
+                    if child_router_ids:
+                        for child_router_id in child_router_ids:
+                            # 자식 라우터 노드의 디싱크 ASN 리스트 가져오기
+                            child_router_desync_asns = per_mote_stats.get(child_router_id, {}).get('desync_asn', [])
+
+                            # 자식 라우터 노드가 디싱크된 ASN이 1750 ASN 내에 있는지 확인
+                            for child_router_asn in child_router_desync_asns:
+                                if asn <= child_router_asn <= asn_end:
+                                    # 자식 라우터 노드의 협상 셀 기간과 상태를 확인
+                                    child_router_nego_periods = nego_periods_by_mote.get(child_router_id, [])
+                                    child_router_non_nego_periods = non_nego_periods_by_mote.get(child_router_id, [])
+
+                                    # 자식 라우터 노드가 협상 셀이 있는 기간에 있는지 확인
+                                    if any(period['start'] <= child_router_asn <= period['end'] for period in child_router_nego_periods):
+                                        desync_nego_child_router_num += 1
+                                    # 자식 라우터 노드가 협상 셀이 없는 기간에 있는지 확인
+                                    elif any(period['start'] <= child_router_asn <= period['end'] for period in child_router_non_nego_periods):
+                                        desync_non_nego_child_router_num += 1
+
+
+        # 각 run_id에 대한 결과 저장
+        desync_nego_child_num_data.append(desync_nego_child_num)
+        desync_non_nego_child_num_data.append(desync_non_nego_child_num)
+        desync_nego_child_router_num_data.append(desync_nego_child_router_num)
+        desync_non_nego_child_router_num_data.append(desync_non_nego_child_router_num)
+
+    # 평균 및 표준편차 계산
+    avgStates['desync_nego_child_num_network'] = calculate_stats(desync_nego_child_num_data)
+    avgStates['desync_non_nego_child_num_network'] = calculate_stats(desync_non_nego_child_num_data)
+    avgStates['desync_nego_child_router_num_network'] = calculate_stats(desync_nego_child_router_num_data)
+    avgStates['desync_non_nego_child_router_num_network'] = calculate_stats(desync_non_nego_child_router_num_data)
+
+
+ #=========================================================================================================================
+
+# === remove unnecessary stats
 
     for (run_id, per_mote_stats) in list(allstats.items()):
         for (mote_id, motestats) in list(per_mote_stats.items()):
