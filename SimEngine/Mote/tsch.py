@@ -718,12 +718,14 @@ class Tsch(object):
                     self._reset_keep_alive_timer()
                     self._reset_synchronization_timer()
 
-                    cs_mac_addr = self.clock.source
-                    cleaned_hex_string = cs_mac_addr.replace('-', '')
-                    last_four_hex = cleaned_hex_string[-4:]
-                    cs_id = int(last_four_hex, 16)
-            
-                    self.csEbTxAsn = self.engine.motes[cs_id].tsch.nextEbTxAsn
+                    if self.pktToSend[u'type'] == d.PKT_TYPE_KEEP_ALIVE:
+                    
+                        cs_mac_addr = self.clock.source
+                        cleaned_hex_string = cs_mac_addr.replace('-', '')
+                        last_four_hex = cleaned_hex_string[-4:]
+                        cs_id = int(last_four_hex, 16)
+                
+                        self.csEbTxAsn = self.engine.motes[cs_id].tsch.nextEbTxAsn
                 # remove packet from queue
                 self.dequeue(self.pktToSend)
 
@@ -1216,7 +1218,17 @@ class Tsch(object):
                 channel_offset = 0
 
                 if self.mote.dagRoot:
-                    pass 
+                    # 송신: EB는 자신의 ID 기반, DIO는 0
+                    # 수신: 아무거나 상관 없음 (0 사용)
+
+                    # 수신이고 EB일 경우
+                    if pakcet_type == d.PKT_TYPE_EB:
+                        channel_offset = self.mote.id % (self.settings.phy_numChans - 1) + 1 # EB 인덱스에서는 나의 ID 기반 채널 오프셋
+                    else:
+                        # 나머지 패킷은 채널오프셋 0
+                        pass
+
+                # 루트가 아닌 노드들
                 elif pakcet_type is not None: # 패킷 전송 시
 
                     # EB일 경우

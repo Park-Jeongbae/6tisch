@@ -1,12 +1,12 @@
 {
     "version":                                             0,
     "execution": {
-        "numCPUs":                                         -1,
-        "numRuns":                                         15
+        "numCPUs":                                         10,
+        "numRuns":                                         20
     },
     "settings": {
         "combination": {
-            "exec_numMotes":                               [10]
+            "exec_numMotes":                               [50]
         },
         "regular": {
             "exec_numSlotframesPerRun":                    null,
