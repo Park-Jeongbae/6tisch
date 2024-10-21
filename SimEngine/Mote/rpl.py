@@ -150,6 +150,9 @@ class Rpl(object):
             }
         )
 
+        if self.mote.tsch.clock.source != new_preferred:
+            self.mote.tsch.parentEbAsn = None
+
         if new_preferred is None:
             assert old_preferred
             # stop the DAO timer
@@ -319,6 +322,7 @@ class Rpl(object):
                 u'rank':          rank,
                 u'dodagId':       self.dodagId,
                 u'hops':          self.hops,
+                u'parentEbAsn':   self.mote.tsch.parentEbAsn,
             },
             u'net': {
                 u'srcIp':         self.mote.get_ipv6_link_local_addr(),
@@ -404,6 +408,13 @@ class Rpl(object):
                 if rank == self.get_rank() and preferredParent == self.getPreferredParent():
                     self.trickle_timer.increment_counter()
 
+                if self.dodagId is not None and packet[u'mac'][u'srcMac'] == self.getPreferredParent():
+                    # 선호 부모가 부모노드를 변경한 상태
+                    if packet[u'app'][u'parentEbAsn'] is None:
+                        self.mote.tsch.parentEbAsn = None
+                    elif self.mote.tsch.parentEbAsn is not None and self.mote.tsch.parentEbAsn % 3 == packet[u'app'][u'parentEbAsn'] % 3:
+                        self.mote.tsch.parentEbAsn = packet[u'app'][u'parentEbAsn']
+  
         # 패킷 송신자와 선호부모가 같을 경우
         if self.dodagId is not None and packet['mac']['srcMac'] == self.getPreferredParent():
             self.hops = packet[u'app'][u'hops'] + 1
@@ -934,7 +945,6 @@ class RplOF0(RplOFBase):
 
             # reset Trickle Timer
             self.rpl.trickle_timer.reset()
-            self.rpl.mote.tsch.parentEbAsn = None
         elif (
                 (new_parent is None)
                 and

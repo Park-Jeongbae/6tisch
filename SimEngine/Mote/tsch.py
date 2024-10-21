@@ -85,6 +85,14 @@ class Tsch(object):
         self.args_for_next_pending_bit_task = None
         self.parentEbAsn = None
         self.first_eb                       = True
+        self.sync_asn                       = None
+        if self.mote.id == 0:
+            self.parentEbAsn = d.TRGB_BLUE
+
+        self.last_send_eb_asn = None
+        self.last_rx_eb_asn = None
+        self.last_tx_ka_asn = None
+        self.last_tx_ka_ack = None
 
         assert self.settings.phy_numChans <= len(d.TSCH_HOPPING_SEQUENCE)
         self.hopping_sequence = (
@@ -133,7 +141,22 @@ class Tsch(object):
             self.engine.removeFutureEvent(      # remove previously scheduled listeningForEB cells
                 uniqueTag=(self.mote.id, u'_action_listeningForEB_cell')
             )
+            self.sync_asn = self.engine.getAsn()
         else:
+            cs_mac_addr = self.clock.source
+            cleaned_hex_string = cs_mac_addr.replace('-', '')
+            last_four_hex = cleaned_hex_string[-4:]
+            cs_id = int(last_four_hex, 16)
+            if cs_id == 0:
+                parent_parentEbAsn = 0
+            else:
+                parent_parentEbAsn = self.engine.motes[cs_id].tsch.parentEbAsn
+
+
+            
+            cs = self.engine.motes[cs_id]
+
+
             code = 'Sync'
             if self.mote.secjoin.getIsJoined():
                 code = 'Joined'
@@ -168,6 +191,16 @@ class Tsch(object):
                         child_router_ids.append(child_id)
                     else:
                         child_ids.append(child_id)
+            
+            
+            cs_eb = None
+            if cs.tsch.parentEbAsn is not None:
+                cs_eb = cs.tsch.parentEbAsn % 3
+            
+            eb = None
+            if self.parentEbAsn is not None:
+                eb = self.parentEbAsn % 3
+
             # log
             self.log(
                 SimEngine.SimLog.LOG_TSCH_DESYNCED,
@@ -195,10 +228,17 @@ class Tsch(object):
             self.received_eb_list = {}
             self.parentEbAsn = None
             self.first_eb = True
+            if self.mote.id != 0:
+                self.parentEbAsn = None
             # we may have this timer task
             self.engine.removeFutureEvent(
                 uniqueTag=(self.mote.id, u'tsch', u'wait_secjoin')
             )
+            self.sync_asn = None
+            self.last_send_eb_asn = None
+            self.last_tx_ka_asn = None
+            self.last_rx_eb_asn = None
+            self.last_tx_ka_ack = None
 
             # transition: active->listeningForEB
             self.engine.removeFutureEvent(      # remove previously scheduled listeningForEB cells
@@ -426,6 +466,12 @@ class Tsch(object):
             ):
             # my TX queue is full
 
+
+            typeList = []
+            if 'type' in packet and packet['type'] == d.PKT_TYPE_KEEP_ALIVE:
+                for i, _ in enumerate(self.txQueue):
+                    typeList.append(self.txQueue[i]['type'])
+
             # drop
             self.mote.drop_packet(
                 packet  = packet,
@@ -538,11 +584,44 @@ class Tsch(object):
         assert cell
         dst_mac_addr = cell.mac_addr
         packet_to_send = None
+        ASFC = self.engine.getAsn() // self.settings.tsch_slotframeLength
         if dst_mac_addr is None:
             if cell.link_type in [d.LINKTYPE_ADVERTISING,d.LINKTYPE_ADVERTISING_ONLY]:
+
+                # 루트를 제외한 노드
+                if not self.mote.dagRoot:
+                    # EB 수신 시점을 모르면 RED에서만 송신 가능
+                    if  self.parentEbAsn is None:
+                        if  ASFC % 3 != d.TRGB_RED:
+                            return None
+                    else:
+                        # EB 수신 시점을 알더라도, 동일한 시점에서는 송신 불가능
+                        if self.parentEbAsn % 3 == ASFC % 3:
+                            return None
+                else:
+                    # 루트 노드는 BLUE만 아니면 다 전송가능
+                    if ASFC % 3 == d.TRGB_BLUE:
+                        return None
+
                 for packet in self.txQueue:
                     if packet['mac']['dstMac'] == d.BROADCAST_ADDRESS:
-                        packet_to_send = packet
+                        
+                        if packet[u'type'] == d.PKT_TYPE_EB:
+                            if self.mote.dagRoot:
+                                if ASFC % 3 == d.TRGB_GREEN:
+                                    packet_to_send = packet
+                                    break
+                            else:
+                                #  RED가 아니며, 부모에게 EB를 수신한 반대에서 송신 가능함
+                                if  ASFC % 3 != d.TRGB_RED and \
+                                    self.parentEbAsn % 3 != ASFC % 3:
+                                    packet_to_send = packet
+                                    break
+                        else:
+                            # RPL 메세지는 RED에서만 전송
+                            if ASFC % 3 == d.TRGB_RED:
+                                packet_to_send = packet
+                                break
                     if packet_to_send is not None:
                         break
             else:
@@ -621,6 +700,12 @@ class Tsch(object):
                 d.CELLOPTION_RX not in active_cell.options:
 
                 isAutonomousTx = True
+
+        if self.pktToSend['type'] == d.PKT_TYPE_EB:
+            self.last_send_eb_asn = self.engine.getAsn()
+        elif self.pktToSend['type'] == d.PKT_TYPE_KEEP_ALIVE:
+            self.last_tx_ka_asn = self.engine.getAsn()
+            self.last_tx_ka_ack = isACKed
 
         # log
         self.log(
@@ -762,6 +847,8 @@ class Tsch(object):
         # not waiting for anything anymore
         self.waitingFor = None
 
+        ASFC = self.engine.getAsn() // self.settings.tsch_slotframeLength
+
         if packet:
             # add the source mote to the neighbor list if it's not listed yet
             if packet[u'mac'][u'srcMac'] not in self.neighbor_table:
@@ -821,6 +908,8 @@ class Tsch(object):
                 self.clock.sync()
                 self._reset_keep_alive_timer()
                 self._reset_synchronization_timer()
+                if packet['type'] == d.PKT_TYPE_EB:
+                    self.last_rx_eb_asn = self.engine.getAsn()
 
             # update schedule stats
             if (
@@ -993,22 +1082,6 @@ class Tsch(object):
                                             d.LINKTYPE_ADVERTISING_ONLY
                                         ]
                                     )
-                                    and
-                                    (   
-                                        # 루트는 G에서 EB를 전송하도록 설정
-                                        (
-                                            self.mote.dagRoot and
-                                            self.engine.getAsn() % 3 == d.TRGB_GREEN
-                                        )
-                                        or
-                                        # 루트가 아닐 경우 부모로 부터 EB를 수신한 색 반대에서 전송하도록 설정
-                                        (
-                                            (not self.mote.dagRoot) and
-                                            self.parentEbAsn is not None and
-                                            self.engine.getAsn() % 3 != d.TRGB_RED and
-                                            self.parentEbAsn % 3 != self.engine.getAsn() % 3
-                                        )
-                                    )                           
                                 ):
                                 # we can send the EB on this link (cell)
                                 packet_to_send = _packet_to_send
@@ -1029,13 +1102,8 @@ class Tsch(object):
                             _packet_to_send[u'backoff_remaining_delay'] -= 1
                             # skip this cell for transmission
                         else:
-                            if _packet_to_send[u'type'] == d.PKT_TYPE_DIO or _packet_to_send[u'type'] == d.PKT_TYPE_DIS:
-                                if self.engine.getAsn() % 3 == d.TRGB_RED:
-                                    packet_to_send = _packet_to_send
-                                    active_cell = cell
-                            else:
-                                packet_to_send = _packet_to_send
-                                active_cell = cell
+                            packet_to_send = _packet_to_send
+                            active_cell = cell
 
             if (
                     cell.is_rx_on()
@@ -1119,6 +1187,7 @@ class Tsch(object):
             # identify a cell to be activated
             self.active_cell, self.pktToSend = self._select_active_cell(candidate_cells)
 
+        ASFC = self.engine.getAsn() // self.settings.tsch_slotframeLength
         if self.active_cell:
             if self.pktToSend is None:
                 assert self.active_cell.is_rx_on()
@@ -1126,15 +1195,17 @@ class Tsch(object):
                 # 미니멀 셀일 경우            
                 if self.active_cell.slot_offset == 0:
                     if self.mote.id == d.DAGROOT_ID:
-                        # 루트는 G에서 송신하므로 G에서 수신 불가
-                        if self.engine.getAsn() % 3 == d.TRGB_GREEN:
-                            pass
+                        # 루트는 G에선 보낼 패킷이 없을 경우 Sleep
+                        if ASFC % 3 == d.TRGB_GREEN:
+                            self._schedule_next_active_slot()
+                            return
                     # 루트가 아닐 경우               
                     else:
-                        # R이 아니고 선호 부모의 EB를 수신하였고 TX 순서일 경우 수신 불가
-                        if  self.engine.getAsn() % 3 != d.TRGB_RED and self.parentEbAsn is not None and self.parentEbAsn % 3 != self.engine.getAsn() % 3:
-                            pass
-
+                        # R이 아니고 선호 부모의 EB를 수신하였고 TX 순서일 경우 Sleep
+                        if  ASFC % 3 != d.TRGB_RED and \
+                            self.parentEbAsn is not None and self.parentEbAsn % 3 != ASFC % 3:
+                            self._schedule_next_active_slot()
+                            return
                 self._action_RX()
             else:
                 assert self.active_cell.is_tx_on()
@@ -1143,19 +1214,25 @@ class Tsch(object):
                 if self.active_cell.slot_offset == 0:
                     if self.mote.id == d.DAGROOT_ID:
                         # 루트는 G에서 송신하므로 B일 경우 전송 불가
-                        if self.engine.getAsn() % 3 == d.TRGB_BLUE:
-                            pass
+                        if self.pktToSend[u'type'] == d.PKT_TYPE_EB and ASFC % 3 == d.TRGB_BLUE:
+                            self.pktToSend = None
+                            self._schedule_next_active_slot()
+                            return
                     # 루트가 아닐 경우               
                     else:
                         # 선호 부모의 EB를 수신하지 못한 경우
                         if self.parentEbAsn is None:
                             # R이 아니면 전송 불가
-                            if self.engine.getAsn() % 3 != d.TRGB_RED:
-                                pass
+                            if ASFC % 3 != d.TRGB_RED:
+                                self.pktToSend = None
+                                self._schedule_next_active_slot()
+                                return
                         else:
                             # R이 아니고 수신 셀에서는 전송 불가
-                            if self.engine.getAsn() % 3 != d.TRGB_RED and self.parentEbAsn % 3 == self.engine.getAsn() % 3:
-                                pass
+                            if ASFC % 3 != d.TRGB_RED and self.parentEbAsn % 3 == ASFC % 3:
+                                self.pktToSend = None
+                                self._schedule_next_active_slot()
+                                return
 
                 self._action_TX(
                     pktToSend = self.pktToSend,
@@ -1240,45 +1317,59 @@ class Tsch(object):
                 ASFC = self.engine.getAsn() // self.settings.tsch_slotframeLength
                 numChans = self.settings.phy_numChans
 
+                if self.clock.source is not None:
+                    # Mac addr로부터 ID를 추출
+                    cs_mac_addr = self.clock.source
+                    cleaned_hex_string = cs_mac_addr.replace('-', '')
+                    last_four_hex = cleaned_hex_string[-4:]
+                    cs_id = int(last_four_hex, 16)
+
                 # 루트일 경우
                 if self.mote.dagRoot:
                     # R
-                    if self.engine.getAsn() % 3 == d.TRGB_RED:
+                    if ASFC % 3 == d.TRGB_RED:
                         channel_offset = 0
                     # G, B
                     else:
-                        channel_offset = ((self.simple_hash(self.mote.get_mac_addr()) + ASFC) % (numChans - 1)) + 1
+                        channel_offset = ((self.mote.id % numChans + ASFC) % (numChans - 1)) + 1
                 else:
-                    # 싱크는 됐지만, 선호 부모를 선택하지 못한 상태
-                    if self.mote.tsch.parentEbAsn is None and self.mote.rpl.of.get_preferred_parent() is None:
-                        channel_offset = 0
-                    # 선호 부모를 선택했지만, 선호 부모로부터 EB를 받지 못한 상태
-                    elif self.mote.tsch.parentEbAsn is None:
-                        # R
-                        if self.engine.getAsn() % 3 == d.TRGB_RED:
+                    # 싱크는 됐지만 조인하지 못하거나, 선호 부모를 선택하지 못한 상태
+                    if not self.mote.secjoin.getIsJoined() or self.mote.rpl.dodagId is None:
+                        if ASFC % 3 == d.TRGB_RED:
                             channel_offset = 0
-                        # G, B
                         else:
-                            channel_offset = ((self.simple_hash(self.mote.rpl.of.get_preferred_parent()) + ASFC) % (numChans - 1)) + 1
-                    # 선호 부모를 선택했고, 선호 부모로부터 EB를 받은 상태
-                    else: 
-                        # R
-                        if self.engine.getAsn() % 3 == d.TRGB_RED:
-                            channel_offset = 0
-                        # G
-                        elif self.engine.getAsn() % 3 == d.TRGB_GREEN:
-                            # G에서 부모의 EB를 수신한 경우
-                            if self.mote.tsch.parentEbAsn % 3 == d.TRGB_GREEN:
-                                channel_offset = ((self.simple_hash(self.mote.rpl.of.get_preferred_parent()) + ASFC) % (numChans - 1)) + 1
+
+                            channel_offset = ((cs_id % numChans + ASFC) % (numChans - 1)) + 1
+                    else:
+                        # 선호 부모에게 EB를 받았냐에 따라 달라짐
+
+                        # 선호 부모를 선택했지만, 선호 부모로부터 EB를 받지 못한 상태
+                        if self.mote.tsch.parentEbAsn is None and self.mote.rpl.dodagId is not None:
+                            # R
+                            if ASFC % 3 == d.TRGB_RED:
+                                channel_offset = 0
+                            # G, B
                             else:
-                                channel_offset = ((self.simple_hash(self.mote.get_mac_addr()) + ASFC) % (numChans - 1)) + 1
-                        # B
-                        else:
-                            # B에서 부모의 EB를 수신한 경우
-                            if self.mote.tsch.parentEbAsn % 3 == d.TRGB_BLUE:
-                                channel_offset = ((self.simple_hash(self.mote.rpl.of.get_preferred_parent()) + ASFC) % (numChans - 1)) + 1
+                                channel_offset = ((cs_id % numChans + ASFC) % (numChans - 1)) + 1
+                        # 선호 부모를 선택했고, 선호 부모로부터 EB를 받은 상태
+                        elif self.mote.tsch.parentEbAsn is not None and self.mote.rpl.dodagId is not None:
+                            # R
+                            if ASFC % 3 == d.TRGB_RED:
+                                channel_offset = 0
+                            # G
+                            elif ASFC % 3 == d.TRGB_GREEN:
+                                # G에서 부모의 EB를 수신한 경우
+                                if self.mote.tsch.parentEbAsn % 3 == d.TRGB_GREEN:
+                                    channel_offset = ((cs_id % numChans + ASFC) % (numChans - 1)) + 1
+                                else:
+                                    channel_offset = ((self.mote.id % numChans + ASFC) % (numChans - 1)) + 1
+                            # B
                             else:
-                                channel_offset = ((self.simple_hash(self.mote.get_mac_addr()) + ASFC) % (numChans - 1)) + 1
+                                # B에서 부모의 EB를 수신한 경우
+                                if self.mote.tsch.parentEbAsn % 3 == d.TRGB_BLUE:
+                                    channel_offset = ((cs_id % numChans + ASFC) % (numChans - 1)) + 1
+                                else:
+                                    channel_offset = ((self.mote.id % numChans + ASFC) % (numChans - 1)) + 1
 
                 return self.hopping_sequence[
                     (self.engine.getAsn() + channel_offset) %
@@ -1289,12 +1380,6 @@ class Tsch(object):
             (self.engine.getAsn() + cell.channel_offset) %
             len(self.hopping_sequence)
         ]
-
-    def simple_hash(self, text):
-        hash_value = 0
-        for char in text:
-            hash_value += ord(char)  # 각 문자의 ASCII 값을 더함
-        return hash_value % 1000  # 해시 값을 1000으로 나눈 나머지를 반환
 
     # EBs
 
@@ -1377,9 +1462,9 @@ class Tsch(object):
             else:
                 assert len(self.received_eb_list) < d.TSCH_NUM_NEIGHBORS_TO_WAIT
         else:
-            if self.mote.rpl.of.get_preferred_parent() is not None:
-                if packet[u'mac'][u'srcMac'] == self.mote.rpl.of.get_preferred_parent():                        
-                    self.parentEbAsn = self.engine.getAsn()
+            if self.mote.rpl.dodagId is not None and packet[u'mac'][u'srcMac'] == self.clock.source:
+                self.parentEbAsn = self.engine.getAsn() // self.settings.tsch_slotframeLength
+                # self._sendEB
 
     # Retransmission backoff algorithm
     def _is_retransmission(self, packet):
@@ -1608,7 +1693,7 @@ class Tsch(object):
         packet_to_send = None
         if self._decided_to_send_eb():
             packet_to_send = self._create_EB()
-            if packet_to_send is not None:
+            if packet_to_send is not None and self.parentEbAsn is not None:
                 self.enqueue(packet_to_send,True)
 
         # schedule next EB
